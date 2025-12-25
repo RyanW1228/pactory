@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>pact</title>
+  </head>
+  <body>
+    <button id="connectButton">Connect</button>
+    <button id="logoutButton" style="display: none">Logout</button>
+
+    <p>Address: <span id="account">Not connected</span></p>
+    <p>MNEE Balance: <span id="mneeBalance">-</span></p>
+    <p>ETH Balance: <span id="ethBalance">-</span></p>
+
+    <p>
+      Default view: <span id="defaultModeText">-</span>
+      <button id="toggleDefaultModeButton" disabled>Switch</button>
+    </p>
+
+    <button id="viewPactsButton">View Pacts</button>
+
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>
