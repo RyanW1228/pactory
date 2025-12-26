@@ -50,7 +50,8 @@ const sliderViewsLabel = document.getElementById("sliderViewsLabel");
 const sliderPayoutLabel = document.getElementById("sliderPayoutLabel");
 
 const sendForReviewButton = document.getElementById("sendForReviewButton");
-const sendForReviewStatus = document.getElementById("sendForReviewStatus");
+
+const API_BASE = "http://localhost:3000";
 
 // State
 const address = localStorage.getItem("address");
@@ -1288,8 +1289,60 @@ sendForReviewButton.onclick = async () => {
   const ok = await verifyEthOwnershipOrAlert();
   if (!ok) return;
 
-  // ✅ Success
+  // Build payload (send only what you need)
+  const role = getRole(address);
+  const counterparty = counterpartyInput.value.trim();
+  const durationSeconds =
+    Number(durationDays.value) * 86400 +
+    Number(durationHours.value) * 3600 +
+    Number(durationMinutes.value) * 60;
+
+  // pull the signature + message you stored in verifyEthOwnershipOrAlert()
+  const message = localStorage.getItem(
+    `pactVerifyMsg:${address.toLowerCase()}`
+  );
+  const signature = localStorage.getItem(
+    `pactVerifySig:${address.toLowerCase()}`
+  );
+
+  const payload = {
+    proposerAddress: address,
+    proposerRole: role,
+    counterpartyAddress: counterparty,
+    durationSeconds,
+
+    progressEnabled: progressPayEnabled.checked,
+    progressLocked: milestonesLocked,
+    progressMilestones: progressPayEnabled.checked ? progressMilestones : [],
+
+    aonEnabled: aonPayEnabled.checked,
+    aonLocked: aonRewardsLocked,
+    aonRewards: aonPayEnabled.checked ? aonRewards : [],
+
+    message,
+    signature,
+  };
+
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE}/api/pacts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    alert("Backend not reachable.");
+    return;
+  }
+
+  const data = await resp.json();
+  if (!resp.ok || !data.ok) {
+    alert(data?.error || "Failed to save pact.");
+    return;
+  }
+
   alert("Successfully saved");
+  window.location.href = "./pacts-dashboard.html";
 };
 
 // Init

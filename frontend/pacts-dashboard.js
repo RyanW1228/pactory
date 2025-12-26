@@ -1,33 +1,31 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
 import { RPC_URL, MNEE_ADDRESS } from "./constants.js";
 
-const mneeBalanceSpan = document.getElementById("mneeBalance");
-const address = localStorage.getItem("address");
-if (!address) {
-  window.location.href = "./index.html";
-}
+// Config
+const API_BASE = "http://localhost:3000";
 
+// Session
+const address = localStorage.getItem("address");
+if (!address) window.location.href = "./index.html";
+
+// ABI
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",
 ];
 
+// DOM
 const homeButton = document.getElementById("homeButton");
 const proposePactButton = document.getElementById("proposePactButton");
-const provider = new ethers.JsonRpcProvider(RPC_URL);
-
-const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
-const [raw, decimals] = await Promise.all([
-  token.balanceOf(address),
-  token.decimals(),
-]);
-mneeBalanceSpan.innerText = ethers.formatUnits(raw, decimals);
-
-const toggleViewButton = document.getElementById("toggleViewButton");
 
 const currentViewSpan = document.getElementById("currentView");
 const dashboardTitle = document.getElementById("dashboardTitle");
+const sectionsContainer = document.getElementById("sectionsContainer");
 
+const toggleViewButton = document.getElementById("toggleViewButton");
+const mneeBalanceSpan = document.getElementById("mneeBalance");
+
+// Sections
 const SPONSOR_SECTIONS = [
   "Active",
   "Requires Funding",
@@ -45,10 +43,13 @@ const CREATOR_SECTIONS = [
   "Archive",
 ];
 
-const sectionsContainer = document.getElementById("sectionsContainer");
+// View mode storage
+function viewModeKey(addr) {
+  return `pactViewMode:${addr.toLowerCase()}`;
+}
 
-function viewModeKey(address) {
-  return `pactViewMode:${address.toLowerCase()}`;
+function getViewMode() {
+  return localStorage.getItem(viewModeKey(address)) || "sponsor";
 }
 
 function setViewMode(mode) {
@@ -63,8 +64,13 @@ function setViewMode(mode) {
   }
 
   renderSections(mode);
+
+  // load dynamic sections
+  loadSentForReview(mode);
+  loadAwaitingYourReview(mode);
 }
 
+// Render static section containers
 function renderSections(mode) {
   const sections = mode === "sponsor" ? SPONSOR_SECTIONS : CREATOR_SECTIONS;
 
@@ -83,23 +89,207 @@ function renderSections(mode) {
     .join("");
 }
 
-function loadViewMode() {
-  const saved = localStorage.getItem(viewModeKey(address)) || "sponsor";
-  setViewMode(saved);
+async function refreshDashboard() {
+  const mode = getViewMode();
+  // setViewMode calls renderSections + loads
+  setViewMode(mode);
 }
 
-toggleViewButton.onclick = () => {
-  const current = localStorage.getItem(viewModeKey(address)) || "sponsor";
-  const next = current === "sponsor" ? "creator" : "sponsor";
-  setViewMode(next);
-};
+// Shared: attach one click handler per list container
+function attachManageHandler(listEl) {
+  if (!listEl) return;
 
-homeButton.onclick = () => {
-  window.location.href = "./index.html";
-};
+  // Avoid stacking multiple handlers if loader runs repeatedly
+  listEl.onclick = (e) => {
+    const btn = e.target.closest("[data-open-pact]");
+    if (!btn) return;
 
-proposePactButton.onclick = () => {
-  window.location.href = "./pactory.html";
-};
+    const pactId = btn.getAttribute("data-open-pact");
+    const m = btn.getAttribute("data-open-mode"); // "sent" | "awaiting"
 
-loadViewMode();
+    if (!pactId || !m) return;
+
+    window.location.href = `./pact-view.html?id=${encodeURIComponent(
+      pactId
+    )}&mode=${encodeURIComponent(m)}`;
+  };
+}
+
+// Sent for Review (proposer)
+async function loadSentForReview(mode) {
+  const sectionId = "sent-for-review";
+  const listEl = document.getElementById(`list-${sectionId}`);
+  const countEl = document.getElementById(`count-${sectionId}`);
+  if (!listEl || !countEl) return;
+
+  attachManageHandler(listEl);
+
+  try {
+    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
+      address
+    )}&role=${encodeURIComponent(mode)}&bucket=sent_for_review`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    countEl.innerText = `(${data?.rows?.length || 0})`;
+
+    if (
+      !res.ok ||
+      !data.ok ||
+      !Array.isArray(data.rows) ||
+      data.rows.length === 0
+    ) {
+      listEl.innerHTML = `<p class="empty">No pacts yet.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = data.rows
+      .map((p) => {
+        const other =
+          mode === "sponsor" ? p.creator_address : p.sponsor_address;
+        return `
+          <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+            <div style="font-weight:600;">Pact #${p.id}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">Created: ${p.created_at}</div>
+            <button type="button" data-open-pact="${p.id}" data-open-mode="sent" style="margin-top:8px;">
+              Manage
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+  } catch (e) {
+    console.log("Sent for Review load failed:", e);
+    countEl.innerText = "(0)";
+    listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
+  }
+}
+
+// Awaiting Your Review (counterparty)
+async function loadAwaitingYourReview(mode) {
+  const sectionId = "awaiting-your-review";
+  const listEl = document.getElementById(`list-${sectionId}`);
+  const countEl = document.getElementById(`count-${sectionId}`);
+  if (!listEl || !countEl) return;
+
+  attachManageHandler(listEl);
+
+  try {
+    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
+      address
+    )}&role=${encodeURIComponent(mode)}&bucket=awaiting_your_review`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    countEl.innerText = `(${data?.rows?.length || 0})`;
+
+    if (
+      !res.ok ||
+      !data.ok ||
+      !Array.isArray(data.rows) ||
+      data.rows.length === 0
+    ) {
+      listEl.innerHTML = `<p class="empty">No pacts yet.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = data.rows
+      .map((p) => {
+        const other =
+          mode === "sponsor" ? p.creator_address : p.sponsor_address;
+        return `
+          <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+            <div style="font-weight:600;">Pact #${p.id}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">Created: ${p.created_at}</div>
+            <button type="button" data-open-pact="${p.id}" data-open-mode="awaiting" style="margin-top:8px;">
+              Manage
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+  } catch (e) {
+    console.log("Awaiting Your Review load failed:", e);
+    countEl.innerText = "(0)";
+    listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
+  }
+}
+
+// Balance (optional / non-fatal)
+async function loadMneeBalanceSafe() {
+  if (!mneeBalanceSpan) return;
+
+  try {
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
+
+    const [raw, decimals] = await Promise.all([
+      token.balanceOf(address),
+      token.decimals(),
+    ]);
+
+    mneeBalanceSpan.innerText = ethers.formatUnits(raw, decimals);
+  } catch (e) {
+    console.log("MNEE balance load failed:", e);
+    mneeBalanceSpan.innerText = "-";
+  }
+}
+
+// Init
+async function init() {
+  try {
+    homeButton?.addEventListener("click", () => {
+      window.location.href = "./index.html";
+    });
+
+    proposePactButton?.addEventListener("click", () => {
+      window.location.href = "./pactory.html";
+    });
+
+    toggleViewButton?.addEventListener("click", () => {
+      const cur = getViewMode();
+      const next = cur === "sponsor" ? "creator" : "sponsor";
+      setViewMode(next);
+    });
+
+    if (!localStorage.getItem(viewModeKey(address))) {
+      localStorage.setItem(viewModeKey(address), "sponsor");
+    }
+
+    setViewMode(getViewMode());
+
+    if (localStorage.getItem("pactsNeedsRefresh") === "1") {
+      localStorage.removeItem("pactsNeedsRefresh");
+      await refreshDashboard();
+    }
+
+    // Refresh once if coming back from delete/reject
+    if (localStorage.getItem("pactsNeedsRefresh") === "1") {
+      localStorage.removeItem("pactsNeedsRefresh");
+      const mode = getViewMode();
+      renderSections(mode);
+      await loadSentForReview(mode);
+      await loadAwaitingYourReview(mode);
+    }
+
+    // When returning via back button or bfcache, re-fetch lists so deletions show immediately
+    window.addEventListener("pageshow", async () => {
+      try {
+        await refreshDashboard();
+      } catch (e) {
+        console.log("pageshow refresh failed:", e);
+      }
+    });
+
+    await loadMneeBalanceSafe();
+  } catch (e) {
+    console.error("Dashboard init crashed:", e);
+    alert(`Dashboard JS crashed: ${e?.message || e}`);
+  }
+}
+
+init();

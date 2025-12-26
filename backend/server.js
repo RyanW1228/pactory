@@ -166,7 +166,8 @@ app.post("/api/pacts", (req, res) => {
 // List pacts for dashboard sections (we’ll start with sent_for_review)
 app.get("/api/pacts", (req, res) => {
   try {
-    const { address, role, status } = req.query;
+    const { address, role, status, bucket } = req.query;
+
     if (!address || !ethers.isAddress(address))
       throw new Error("Invalid address");
     const addr = normAddr(address);
@@ -174,6 +175,7 @@ app.get("/api/pacts", (req, res) => {
     let where = "";
     const params = [];
 
+    // role filter (who the pact belongs to)
     if (role === "sponsor") {
       where += (where ? " AND " : "") + "lower(sponsor_address)=?";
       params.push(addr);
@@ -184,14 +186,24 @@ app.get("/api/pacts", (req, res) => {
       throw new Error("role must be sponsor or creator");
     }
 
-    if (status) {
+    // bucket logic (maps to underlying status but differs by proposer vs counterparty)
+    if (bucket === "sent_for_review") {
+      where +=
+        (where ? " AND " : "") + "status=? AND lower(proposer_address)=?";
+      params.push("sent_for_review", addr);
+    } else if (bucket === "awaiting_your_review") {
+      where +=
+        (where ? " AND " : "") + "status=? AND lower(proposer_address)<>?";
+      params.push("sent_for_review", addr);
+    } else if (status) {
+      // fallback: raw status filter if you still want it
       where += (where ? " AND " : "") + "status=?";
       params.push(String(status));
     }
 
     const rows = db
       .prepare(
-        `SELECT id, created_at, sponsor_address, creator_address, status
+        `SELECT id, created_at, sponsor_address, creator_address, status, proposer_address, proposer_role
          FROM pacts
          WHERE ${where}
          ORDER BY id DESC
@@ -223,6 +235,42 @@ app.get("/api/pacts/:id", (req, res) => {
         aon_rewards: JSON.parse(row.aon_json || "[]"),
       },
     });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+// Delete (or reject) pact
+app.delete("/api/pacts/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw new Error("Invalid id");
+
+    const { address } = req.query;
+    if (!address || !ethers.isAddress(address))
+      throw new Error("Invalid address");
+
+    const addr = normAddr(address);
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    // Only proposer OR counterparty can delete/reject
+    const isProposer = normAddr(pact.proposer_address) === addr;
+    const isCounterparty = normAddr(pact.counterparty_address) === addr;
+
+    if (!isProposer && !isCounterparty) {
+      throw new Error("Not authorized to delete this pact");
+    }
+
+    // Only allowed while sent_for_review
+    if (pact.status !== "sent_for_review") {
+      throw new Error("Pact can no longer be deleted");
+    }
+
+    db.prepare(`DELETE FROM pacts WHERE id=?`).run(id);
+
+    res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
