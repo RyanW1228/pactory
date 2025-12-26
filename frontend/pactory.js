@@ -7,7 +7,6 @@ const ERC20_ABI = [
 ];
 
 // DOMs
-const mneeBalanceSpan = document.getElementById("mneeBalance");
 const exitButton = document.getElementById("exitButton");
 
 const defaultRoleText = document.getElementById("defaultRoleText");
@@ -57,6 +56,11 @@ const sendForReviewStatus = document.getElementById("sendForReviewStatus");
 const address = localStorage.getItem("address");
 if (!address) window.location.href = "./index.html";
 
+// establish default if missing (same logic as index.js)
+if (!localStorage.getItem(viewModeKey(address))) {
+  localStorage.setItem(viewModeKey(address), "sponsor");
+}
+
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 
 let progressMilestones = [
@@ -68,19 +72,28 @@ let aonRewards = [{ views: "", payout: "" }]; // start with one
 let aonRewardsLocked = false;
 
 // Storage helpers
-function roleKey(addr) {
-  return `pactRole:${addr.toLowerCase()}`;
+function viewModeKey(addr) {
+  return `pactViewMode:${addr.toLowerCase()}`;
 }
 
 function getRole(addr) {
-  return localStorage.getItem(roleKey(addr)) || "sponsor";
+  return localStorage.getItem(viewModeKey(addr)) || "sponsor";
 }
 
 function setRole(addr, role) {
-  localStorage.setItem(roleKey(addr), role);
+  localStorage.setItem(viewModeKey(addr), role);
 }
 
 // UI
+
+function earnVerb() {
+  return getRole(address) === "sponsor" ? "reward" : "earn";
+}
+
+function otherPartyLabel() {
+  return getRole(address) === "sponsor" ? "Creator" : "Sponsor";
+}
+
 function renderRole() {
   const role = getRole(address);
   defaultRoleText.innerText = role === "sponsor" ? "Sponsor" : "Creator";
@@ -136,11 +149,15 @@ function renderProgressMilestones() {
           </div>
 
           <div style="min-width:260px;">
-            <div style="font-size:12px; opacity:0.7;">Implied rate</div>
-            <div id="rate-${i}" style="font-weight:600;">${
-        rateText || "-"
-      }</div>
-          </div>
+  ${
+    i === 0
+      ? `<div style="font-size:12px; opacity:0.7;">Implied rate</div>`
+      : `<div style="height:14px;"></div>`
+  }
+  <div id="rate-${i}" style="font-weight:600;">
+    ${rateText || "-"}
+  </div>
+</div>
         </div>
       `;
     })
@@ -149,11 +166,36 @@ function renderProgressMilestones() {
   renderPayoutGraph();
 }
 
+function formatRate(rate, sig = 2, minDecimals = 2) {
+  if (!Number.isFinite(rate) || rate <= 0) return "";
+
+  const abs = Math.abs(rate);
+
+  // If it's >= 1, dollars+cents already gives >=2 sig digits in normal cases
+  if (abs >= 1) return rate.toFixed(minDecimals);
+
+  // For 0 < abs < 1:
+  // Find the exponent of the first non-zero digit after decimal.
+  // Example: 0.022 -> log10(abs) ~ -1.66, floor = -2
+  // Needed decimals for sig=2: (-floor(log10(abs))) + (sig - 1)
+  const exp = Math.floor(Math.log10(abs)); // negative
+  const neededDecimalsForSig = -exp + (sig - 1);
+
+  const decimals = Math.max(minDecimals, neededDecimalsForSig);
+  return rate.toFixed(decimals);
+}
+
 function renderProgressPayEnabled() {
   const enabled = progressPayEnabled.checked;
 
   progressPayBody.style.display = enabled ? "block" : "none";
   noProgressPayText.style.display = enabled ? "none" : "block";
+
+  // ✅ hide/show Save + Edit when disabled
+  saveMilestonesButton.style.display =
+    enabled && !milestonesLocked ? "inline-block" : "none";
+  editMilestonesButton.style.display =
+    enabled && milestonesLocked ? "inline-block" : "none";
 
   if (!enabled) {
     progressMilestones = [{ views: "", payout: "" }];
@@ -171,15 +213,19 @@ function updateDeleteMilestoneVisibility() {
 }
 
 function updateMilestoneControlsVisibility() {
-  const locked = milestonesLocked;
+  if (!progressPayEnabled.checked) {
+    addMilestoneButton.style.display = "none";
+    deleteMilestoneButton.style.display = "none";
+    saveMilestonesButton.style.display = "none";
+    editMilestonesButton.style.display = "none";
+    return;
+  }
 
-  // When unlocked
+  const locked = milestonesLocked;
   addMilestoneButton.style.display = locked ? "none" : "inline-block";
   deleteMilestoneButton.style.display =
     locked || progressMilestones.length <= 1 ? "none" : "inline-block";
   saveMilestonesButton.style.display = locked ? "none" : "inline-block";
-
-  // When locked
   editMilestonesButton.style.display = locked ? "inline-block" : "none";
 }
 
@@ -195,7 +241,7 @@ function impliedRateText(i) {
 
   if (i === 0) {
     const rate = p / v;
-    return `For views 1 to ${v}, you earn $${rate.toFixed(2)}/view`;
+    return `For views 1 to ${v}, you ${earnVerb()} $${formatRate(rate)}/view`;
   }
 
   const prev = progressMilestones[i - 1];
@@ -208,7 +254,9 @@ function impliedRateText(i) {
   if (dv <= 0 || dp <= 0) return "";
 
   const rate = dp / dv;
-  return `For views ${pv + 1} to ${v}, you earn $${rate.toFixed(2)}/view`;
+  return `For views ${pv + 1} to ${v}, you ${earnVerb()} $${formatRate(
+    rate
+  )}/view`;
 }
 
 function renderAonRewards() {
@@ -275,6 +323,12 @@ function renderAonPayEnabled() {
   aonPayBody.style.display = enabled ? "block" : "none";
   noAonPayText.style.display = enabled ? "none" : "block";
 
+  // ✅ hide/show Save + Edit when disabled
+  saveAonRewardButton.style.display =
+    enabled && !aonRewardsLocked ? "inline-block" : "none";
+  editAonRewardsButton.style.display =
+    enabled && aonRewardsLocked ? "inline-block" : "none";
+
   if (!enabled) {
     aonRewards = [{ views: "", payout: "" }];
     aonStatus.innerText = "";
@@ -291,13 +345,19 @@ function updateDeleteAonRewardVisibility() {
 }
 
 function updateAonRewardControlsVisibility() {
-  const locked = aonRewardsLocked;
+  if (!aonPayEnabled.checked) {
+    addAonRewardButton.style.display = "none";
+    deleteAonRewardButton.style.display = "none";
+    saveAonRewardButton.style.display = "none";
+    editAonRewardsButton.style.display = "none";
+    return;
+  }
 
+  const locked = aonRewardsLocked;
   addAonRewardButton.style.display = locked ? "none" : "inline-block";
   deleteAonRewardButton.style.display =
     locked || aonRewards.length <= 1 ? "none" : "inline-block";
   saveAonRewardButton.style.display = locked ? "none" : "inline-block";
-
   editAonRewardsButton.style.display = locked ? "inline-block" : "none";
 }
 
@@ -312,7 +372,7 @@ function aonRewardText(i) {
   if (!Number.isInteger(v) || v <= 0 || !Number.isFinite(p) || p <= 0)
     return "";
 
-  return `You earn an additional $${p.toFixed(2)} at ${v} views.`;
+  return `You ${earnVerb()} an additional $${p.toFixed(2)} at ${v} views.`;
 }
 
 function progressPayoutAtViews(x) {
@@ -708,7 +768,10 @@ function validateCounterparty() {
   }
 
   if (!ethers.isAddress(value)) {
-    counterpartyStatus.innerText = "Invalid Ethereum address";
+    counterpartyStatus.innerText = `Invalid ${
+      role === "sponsor" ? "Creator" : "Sponsor"
+    } address`;
+
     return false;
   }
 
@@ -887,14 +950,75 @@ function validateAonRewardsAndExplain() {
   return { ok: true, msg: "✓ Rewards look good." };
 }
 
-// Chain reads
-async function loadMneeBalance() {
-  const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
-  const [raw, decimals] = await Promise.all([
-    token.balanceOf(address),
-    token.decimals(),
-  ]);
-  mneeBalanceSpan.innerText = ethers.formatUnits(raw, decimals);
+async function verifyEthOwnershipOrAlert() {
+  if (!window.ethereum) {
+    alert("MetaMask not found. Install MetaMask to verify.");
+    return false;
+  }
+
+  const browserProvider = new ethers.BrowserProvider(window.ethereum);
+
+  // Ask MetaMask for the currently selected account
+  const accounts = await window.ethereum.request({
+    method: "eth_requestAccounts",
+  });
+  const selected = (accounts?.[0] || "").toLowerCase();
+
+  if (!selected) {
+    alert("No wallet selected in MetaMask.");
+    return false;
+  }
+
+  // Make sure the selected wallet matches the one you 'logged in' with
+  if (selected !== address.toLowerCase()) {
+    alert(
+      `MetaMask account does not match your login address.\n\nLogin: ${address}\nMetaMask: ${accounts[0]}`
+    );
+    return false;
+  }
+
+  const signer = await browserProvider.getSigner();
+
+  // (Optional but nice) bind signature to this page + role + counterparty
+  const role = getRole(address);
+  const counterparty = counterpartyInput.value.trim();
+  const durationSec =
+    Number(durationDays.value) * 86400 +
+    Number(durationHours.value) * 3600 +
+    Number(durationMinutes.value) * 60;
+
+  const nonce = ethers.hexlify(ethers.randomBytes(16));
+  const issuedAt = new Date().toISOString();
+
+  const message =
+    `Pactory verification\n` +
+    `Address: ${address}\n` +
+    `Role: ${role}\n` +
+    `Counterparty: ${counterparty || "(none)"}\n` +
+    `DurationSeconds: ${durationSec}\n` +
+    `Nonce: ${nonce}\n` +
+    `IssuedAt: ${issuedAt}`;
+
+  let signature;
+  try {
+    signature = await signer.signMessage(message);
+  } catch {
+    alert("Signature was rejected. Verification failed.");
+    return false;
+  }
+
+  // Verify signature recovers the same address
+  const recovered = ethers.verifyMessage(message, signature).toLowerCase();
+  if (recovered !== address.toLowerCase()) {
+    alert("Signature verification failed (recovered address mismatch).");
+    return false;
+  }
+
+  // Optional: persist proof for backend later
+  localStorage.setItem(`pactVerifySig:${address.toLowerCase()}`, signature);
+  localStorage.setItem(`pactVerifyMsg:${address.toLowerCase()}`, message);
+
+  return true;
 }
 
 // Handlers
@@ -1093,10 +1217,84 @@ viewsSlider?.addEventListener("input", () => {
   renderPayoutGraph();
 });
 
+sendForReviewButton.onclick = async () => {
+  // 1) Counterparty must be valid
+  if (!validateCounterparty()) {
+    alert(counterpartyStatus.innerText || "Enter a valid address.");
+    return;
+  }
+
+  // 2) Duration must be valid
+  if (!validateDuration()) {
+    alert(durationStatus.innerText || "Enter a valid duration.");
+    return;
+  }
+
+  // 4) Progress Pay must be disabled OR saved (and valid if enabled)
+  if (progressPayEnabled.checked) {
+    if (!milestonesLocked) {
+      alert(
+        "Progress Pay is enabled — please Save it (lock it) or disable it."
+      );
+      return;
+    }
+    const result = validateMilestonesAndExplain();
+    if (!result.ok) {
+      alert(result.msg);
+      return;
+    }
+  }
+
+  // 4) AON Pay must be disabled OR saved (and valid if enabled)
+  if (aonPayEnabled.checked) {
+    if (!aonRewardsLocked) {
+      alert(
+        "All-or-Nothing Pay is enabled — please Save it (lock it) or disable it."
+      );
+      return;
+    }
+    const result = validateAonRewardsAndExplain();
+    if (!result.ok) {
+      alert(result.msg);
+      return;
+    }
+  }
+
+  // 3) Must exist at least one payment
+  const hasProgressPayment =
+    progressPayEnabled.checked &&
+    progressMilestones.some((m) => {
+      const v = Number(String(m.views ?? "").trim());
+      const p = Number(String(m.payout ?? "").trim());
+      return Number.isInteger(v) && v > 0 && Number.isFinite(p) && p > 0;
+    });
+
+  const hasAonPayment =
+    aonPayEnabled.checked &&
+    aonRewards.some((r) => {
+      const v = Number(String(r.views ?? "").trim());
+      const p = Number(String(r.payout ?? "").trim());
+      return Number.isInteger(v) && v > 0 && Number.isFinite(p) && p > 0;
+    });
+
+  if (!hasProgressPayment && !hasAonPayment) {
+    alert(
+      "You must include at least one payment (a milestone and/or a reward)."
+    );
+    return;
+  }
+
+  // ✅ REAL Ethereum verification (signature)
+  const ok = await verifyEthOwnershipOrAlert();
+  if (!ok) return;
+
+  // ✅ Success
+  alert("Successfully saved");
+};
+
 // Init
 renderRole();
 validateCounterparty();
-validateDuration();
 renderProgressMilestones();
 updateMilestoneControlsVisibility();
 renderProgressPayEnabled();
@@ -1106,4 +1304,3 @@ renderAonPayEnabled();
 renderPayoutGraph();
 syncSliderBounds();
 updateSliderReadout();
-await loadMneeBalance();

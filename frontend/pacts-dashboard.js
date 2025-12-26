@@ -23,8 +23,8 @@ const [raw, decimals] = await Promise.all([
 ]);
 mneeBalanceSpan.innerText = ethers.formatUnits(raw, decimals);
 
-const sponsorViewButton = document.getElementById("sponsorViewButton");
-const creatorViewButton = document.getElementById("creatorViewButton");
+const toggleViewButton = document.getElementById("toggleViewButton");
+
 const currentViewSpan = document.getElementById("currentView");
 const dashboardTitle = document.getElementById("dashboardTitle");
 
@@ -88,8 +88,11 @@ function loadViewMode() {
   setViewMode(saved);
 }
 
-sponsorViewButton.onclick = () => setViewMode("sponsor");
-creatorViewButton.onclick = () => setViewMode("creator");
+toggleViewButton.onclick = () => {
+  const current = localStorage.getItem(viewModeKey(address)) || "sponsor";
+  const next = current === "sponsor" ? "creator" : "sponsor";
+  setViewMode(next);
+};
 
 homeButton.onclick = () => {
   window.location.href = "./index.html";
