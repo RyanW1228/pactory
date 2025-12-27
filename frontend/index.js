@@ -137,44 +137,7 @@ async function loadFromLocalStorage() {
   renderDefaultModeUI(stored);
 }
 
-async function connect() {
-  if (!window.ethereum) {
-    alert("Install MetaMask first.");
-    return;
-  }
 
-  // 🔴 FORCE account chooser every time
-  await window.ethereum.request({
-    method: "wallet_requestPermissions",
-    params: [{ eth_accounts: {} }],
-  });
-
-  const accounts = await window.ethereum.request({
-    method: "eth_requestAccounts",
-  });
-
-  const address = accounts?.[0];
-  if (!address) {
-    alert("No account selected.");
-    return;
-  }
-
-  // Persist address (soft login)
-  localStorage.setItem("address", address);
-  accountSpan.innerText = address;
-
-  connectButton.style.display = "none";
-  logoutButton.style.display = "inline-block";
-
-  // Default view per wallet
-  if (!localStorage.getItem(viewModeKey(address))) {
-    setDefaultMode(address, "sponsor");
-  }
-  renderDefaultModeUI(address);
-
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  await showBalances(provider, address);
-}
 
 // Handlers
 connectButton.onclick = () => connect().catch((e) => alert(e?.message || e));
