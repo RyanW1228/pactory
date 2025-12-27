@@ -448,12 +448,11 @@ async function initContracts() {
     return;
   }
 
-  provider = new ethers.BrowserProvider(window.ethereum);
-  signer = await provider.getSigner();
+  provider = new ethers.JsonRpcProvider(RPC_URL);
 
-  escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, signer);
-
-  mnee = new ethers.Contract(MNEE_ADDRESS, ERC20ABI, signer);
+  // read-only contracts (no signer)
+  escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, provider);
+  mnee = new ethers.Contract(MNEE_ADDRESS, ERC20ABI, provider);
 
   console.log("✅ Dashboard contracts ready");
 }
