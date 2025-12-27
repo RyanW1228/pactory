@@ -1,7 +1,8 @@
 // db.js
 import Database from "better-sqlite3";
 
-const db = new Database("pacts.db");
+const DB_PATH = process.env.DB_PATH || "./pacts.db";
+const db = new Database(DB_PATH);
 
 // Initialize database schema
 db.exec(`

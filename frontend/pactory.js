@@ -51,7 +51,7 @@ const sliderPayoutLabel = document.getElementById("sliderPayoutLabel");
 
 const sendForReviewButton = document.getElementById("sendForReviewButton");
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
 
 // State
 const address = localStorage.getItem("address");

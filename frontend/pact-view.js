@@ -1,5 +1,5 @@
 // Config
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
 
 // DOM
 const backButton = document.getElementById("backButton");
