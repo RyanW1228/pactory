@@ -33,13 +33,11 @@ const sectionsContainer = document.getElementById("sectionsContainer");
 const toggleViewButton = document.getElementById("toggleViewButton");
 const mneeBalanceSpan = document.getElementById("mneeBalance");
 
-
-
 // Sections
 const SPONSOR_SECTIONS = [
   "Active",
-  "Requires Funding",
-  "Created",
+  "Created — Requires Funding",
+  "Created — Waiting for Video Link",
   "Awaiting Your Review",
   "Sent for Review",
   "Archive",
@@ -47,7 +45,8 @@ const SPONSOR_SECTIONS = [
 
 const CREATOR_SECTIONS = [
   "Active",
-  "Created – Requires Video Link",
+  "Created — Waiting for Funding",
+  "Created — Requires Video Link",
   "Awaiting Your Review",
   "Sent for Review",
   "Archive",
@@ -61,7 +60,6 @@ const CREATOR_SECTIONS = [
 //   status: pact.status,
 //   funded: pact.fundedAmount.toString()
 // });
-
 
 // View mode storage
 function viewModeKey(addr) {
@@ -313,61 +311,114 @@ async function loadAwaitingYourReview(mode) {
 // Created (both parties)
 // Sponsor section id: "created"
 // Creator section id: "created-requires-video-link"
+// Created (split into two sections based on video_link)
+// Sponsor:
+//   - Created — Requires Funding        (video_link present)
+//   - Created — Waiting for Video Link  (video_link missing)
+//
+// Creator:
+//   - Created — Waiting for Funding     (video_link present)
+//   - Created — Requires Video Link     (video_link missing)
+// Created (split into 2 buckets by video_link)
 async function loadCreated(mode) {
-  const sectionId =
-    mode === "sponsor" ? "created" : "created-requires-video-link";
+  // Sponsor has:
+  //  - Created — Requires Funding
+  //  - Created — Waiting for Video Link
+  //
+  // Creator has:
+  //  - Created — Waiting for Funding
+  //  - Created — Requires Video Link
 
-  const listEl = document.getElementById(`list-${sectionId}`);
-  const countEl = document.getElementById(`count-${sectionId}`);
-  if (!listEl || !countEl) return;
+  const targets =
+    mode === "sponsor"
+      ? [
+          // sponsor: funding required once link exists
+          {
+            sectionId: "created-requires-funding",
+            bucket: "created_requires_funding",
+            openMode: "created",
+          },
+          // sponsor: waiting for creator to add link
+          {
+            sectionId: "created-waiting-for-video-link",
+            bucket: "created_requires_video_link",
+            openMode: "created",
+          },
+        ]
+      : [
+          // creator: waiting for sponsor to fund once link exists
+          {
+            sectionId: "created-waiting-for-funding",
+            bucket: "created_requires_funding",
+            openMode: "created",
+          },
+          // creator: creator must add link
+          {
+            sectionId: "created-requires-video-link",
+            bucket: "created_requires_video_link",
+            openMode: "created",
+          },
+        ];
 
-  attachManageHandler(listEl);
+  for (const t of targets) {
+    const listEl = document.getElementById(`list-${t.sectionId}`);
+    const countEl = document.getElementById(`count-${t.sectionId}`);
+    if (!listEl || !countEl) continue;
 
-  try {
-    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
-      address
-    )}&role=${encodeURIComponent(mode)}&bucket=created`;
+    attachManageHandler(listEl);
 
-    const res = await fetch(url);
-    const data = await res.json().catch(() => ({}));
+    try {
+      const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
+        address
+      )}&role=${encodeURIComponent(mode)}&bucket=${encodeURIComponent(
+        t.bucket
+      )}`;
 
-    countEl.innerText = `(${data?.rows?.length || 0})`;
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
 
-    if (
-      !res.ok ||
-      !data.ok ||
-      !Array.isArray(data.rows) ||
-      data.rows.length === 0
-    ) {
-      listEl.innerHTML = `<p class="empty">No pacts yet.</p>`;
-      return;
+      countEl.innerText = `(${data?.rows?.length || 0})`;
+
+      if (
+        !res.ok ||
+        !data.ok ||
+        !Array.isArray(data.rows) ||
+        data.rows.length === 0
+      ) {
+        listEl.innerHTML = `<p class="empty">No pacts yet.</p>`;
+        continue;
+      }
+
+      listEl.innerHTML = data.rows
+        .map((p) => {
+          const other =
+            mode === "sponsor" ? p.creator_address : p.sponsor_address;
+
+          return `
+            <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+              <div style="font-weight:600;">${displayPactTitle(p)}</div>
+              <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+              <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
+                p.created_at
+              )}</div>
+
+              <button
+                type="button"
+                data-open-pact="${p.id}"
+                data-open-mode="${t.openMode}"
+                style="margin-top:8px;"
+              >
+                Manage
+              </button>
+            </div>
+          `;
+        })
+        .join("");
+    } catch (e) {
+      console.log("Created load failed:", e);
+      countEl.innerText = "(0)";
+      listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
     }
-
-    listEl.innerHTML = data.rows
-      .map((p) => {
-        const other =
-          mode === "sponsor" ? p.creator_address : p.sponsor_address;
-
-        return `
-          <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
-            <div style="font-weight:600;">${displayPactTitle(p)}</div>
-            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
-            <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
-              p.created_at
-            )}</div>
-            <button type="button" data-open-pact="${
-              p.id
-            }" data-open-mode="created" style="margin-top:8px;">
-              Manage
-            </button>
-          </div>
-        `;
-      })
-      .join("");
-  } catch (e) {
-    console.log("Created load failed:", e);
-    countEl.innerText = "(0)";
-    listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
   }
 }
 
@@ -400,21 +451,12 @@ async function initContracts() {
   provider = new ethers.BrowserProvider(window.ethereum);
   signer = await provider.getSigner();
 
-  escrow = new ethers.Contract(
-    PACT_ESCROW_ADDRESS,
-    PactEscrowABI,
-    signer
-  );
+  escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, signer);
 
-  mnee = new ethers.Contract(
-    MNEE_ADDRESS,
-    ERC20ABI,
-    signer
-  );
+  mnee = new ethers.Contract(MNEE_ADDRESS, ERC20ABI, signer);
 
   console.log("✅ Dashboard contracts ready");
 }
-
 
 // Init
 async function init() {
@@ -459,23 +501,14 @@ async function init() {
   }
 }
 
-async function fundPact(pactId, amount) {
-  const wei = ethers.parseUnits(amount, 18);
-
-  await mnee.approve(PACT_ESCROW_ADDRESS, wei);
-  await escrow.fund(pactId, wei);
-}
-
-
 init();
 
 window.addEventListener("load", async () => {
   try {
     await initContracts();
     // now safe to call escrow / mnee
-    await refreshDashboard(); 
+    await refreshDashboard();
   } catch (e) {
     console.error("Init failed", e);
   }
 });
-

@@ -1,124 +1,25 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
 import { MNEE_ADDRESS, RPC_URL } from "./constants.js";
-import PactEscrowABI from "./abis/PactEscrow.json";
-import ERC20ABI from "./abis/ERC20.json";
 
-const ESCROW_ADDRESS = "0x..."; // deployed testnet address
-const MNEE_ADDRESS = "0x...";   // testnet MNEE or mock
-
-let provider, signer, escrow, mnee;
-
+// DOM
 const connectButton = document.getElementById("connectButton");
+const logoutButton = document.getElementById("logoutButton");
+const viewPactsButton = document.getElementById("viewPactsButton");
+
 const accountSpan = document.getElementById("account");
 const balanceSpan = document.getElementById("ethBalance");
 const mneeBalanceSpan = document.getElementById("mneeBalance");
-const viewPactsButton = document.getElementById("viewPactsButton");
-const logoutButton = document.getElementById("logoutButton");
+
 const defaultModeText = document.getElementById("defaultModeText");
 const toggleDefaultModeButton = document.getElementById(
   "toggleDefaultModeButton"
 );
 
+// ABI (minimal)
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",
 ];
-
-await loadFromLocalStorage();
-
-// Show correct buttons on load
-if (localStorage.getItem("address")) {
-  logoutButton.style.display = "inline-block";
-  connectButton.style.display = "none";
-} else {
-  logoutButton.style.display = "none";
-  connectButton.style.display = "inline-block";
-}
-
-async function showBalances(provider, address) {
-  const ethWei = await provider.getBalance(address);
-  balanceSpan.innerText = ethers.formatEther(ethWei);
-
-  const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
-  const [raw, decimals] = await Promise.all([
-    token.balanceOf(address),
-    token.decimals(),
-  ]);
-  mneeBalanceSpan.innerText = ethers.formatUnits(raw, decimals);
-}
-
-async function connect() {
-  if (!window.ethereum) {
-    connectButton.innerText = "Install MetaMask";
-    return;
-  }
-
-  await window.ethereum.request({
-    method: "wallet_requestPermissions",
-    params: [{ eth_accounts: {} }],
-  });
-
-  const accounts = await window.ethereum.request({
-    method: "eth_requestAccounts",
-  });
-
-  const address = accounts[0];
-
-  // Persist address (soft login)
-  localStorage.setItem("address", address);
-  accountSpan.innerText = address;
-
-  connectButton.style.display = "none";
-  logoutButton.style.display = "inline-block";
-
-  // Default mode per wallet
-  setDefaultMode(address, getDefaultMode(address));
-  renderDefaultModeUI(address);
-
-  // Read balances via RPC (as before)
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  await showBalances(provider, address);
-}
-
-async function setupContracts(params) {
-  provider = new ethers.BrowserProvider(window.ethereum);
-  signer = await provider.getSigner();
-
-  escrow = new ethers.Contract(
-    ESCROW_ADDRESS,
-    PactEscrowABI,
-    signer);
-
-  mnee = new ethers.Contract(
-    MNEE_ADDRESS, ERC20ABI, signer
-  );
-
-  
-  
-}
-
-async function loadFromLocalStorage() {
-  const stored = localStorage.getItem("address");
-  if (!stored) {
-    accountSpan.innerText = "Not connected";
-    balanceSpan.innerText = "-";
-    mneeBalanceSpan.innerText = "-";
-    defaultModeText.innerText = "-";
-    toggleDefaultModeButton.disabled = true;
-    return;
-  }
-
-  accountSpan.innerText = stored;
-
-  // establish per-wallet default if missing
-  const key = viewModeKey(stored);
-  if (!localStorage.getItem(key)) localStorage.setItem(key, "sponsor");
-
-  // paint balances + default view
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  await showBalances(provider, stored);
-  renderDefaultModeUI(stored);
-}
 
 function viewModeKey(address) {
   return `pactViewMode:${address.toLowerCase()}`;
@@ -138,14 +39,93 @@ function renderDefaultModeUI(address) {
   toggleDefaultModeButton.disabled = false;
 }
 
-connectButton.onclick = connect;
+async function showBalances(provider, address) {
+  const ethWei = await provider.getBalance(address);
+  balanceSpan.innerText = ethers.formatEther(ethWei);
 
-viewPactsButton.onclick = () => {
-  const address = localStorage.getItem("address");
-  if (!address) {
-    alert("Please connect a wallet first so we know which address to show.");
+  const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
+  const [raw, decimals] = await Promise.all([
+    token.balanceOf(address),
+    token.decimals(),
+  ]);
+  mneeBalanceSpan.innerText = ethers.formatUnits(raw, decimals);
+}
+
+async function loadFromLocalStorage() {
+  const stored = localStorage.getItem("address");
+  if (!stored) {
+    accountSpan.innerText = "Not connected";
+    balanceSpan.innerText = "-";
+    mneeBalanceSpan.innerText = "-";
+    defaultModeText.innerText = "-";
+    toggleDefaultModeButton.disabled = true;
+
+    logoutButton.style.display = "none";
+    connectButton.style.display = "inline-block";
     return;
   }
+
+  accountSpan.innerText = stored;
+
+  // establish per-wallet default if missing
+  const key = viewModeKey(stored);
+  if (!localStorage.getItem(key)) localStorage.setItem(key, "sponsor");
+
+  // show correct buttons
+  logoutButton.style.display = "inline-block";
+  connectButton.style.display = "none";
+
+  // paint balances + default view
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  await showBalances(provider, stored);
+  renderDefaultModeUI(stored);
+}
+
+async function connect() {
+  if (!window.ethereum) {
+    alert("Install MetaMask first.");
+    return;
+  }
+
+  // 🔴 FORCE account chooser every time
+  await window.ethereum.request({
+    method: "wallet_requestPermissions",
+    params: [{ eth_accounts: {} }],
+  });
+
+  const accounts = await window.ethereum.request({
+    method: "eth_requestAccounts",
+  });
+
+  const address = accounts?.[0];
+  if (!address) {
+    alert("No account selected.");
+    return;
+  }
+
+  // Persist address (soft login)
+  localStorage.setItem("address", address);
+  accountSpan.innerText = address;
+
+  connectButton.style.display = "none";
+  logoutButton.style.display = "inline-block";
+
+  // Default view per wallet
+  if (!localStorage.getItem(viewModeKey(address))) {
+    setDefaultMode(address, "sponsor");
+  }
+  renderDefaultModeUI(address);
+
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  await showBalances(provider, address);
+}
+
+// Handlers
+connectButton.onclick = () => connect().catch((e) => alert(e?.message || e));
+
+viewPactsButton.onclick = () => {
+  const addr = localStorage.getItem("address");
+  if (!addr) return alert("Connect a wallet first.");
   window.location.href = "./pacts-dashboard.html";
 };
 
@@ -164,11 +144,14 @@ logoutButton.onclick = () => {
 };
 
 toggleDefaultModeButton.onclick = () => {
-  const address = localStorage.getItem("address");
-  if (!address) return;
+  const addr = localStorage.getItem("address");
+  if (!addr) return;
 
-  const current = getDefaultMode(address);
+  const current = getDefaultMode(addr);
   const next = current === "sponsor" ? "creator" : "sponsor";
-  setDefaultMode(address, next);
-  renderDefaultModeUI(address);
+  setDefaultMode(addr, next);
+  renderDefaultModeUI(addr);
 };
+
+// Init
+loadFromLocalStorage().catch(() => {});

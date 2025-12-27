@@ -2,6 +2,9 @@
 //const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
 const API_BASE = "http://localhost:3000";
 
+import { ethers } from "./ethers-6.7.esm.min.js";
+import { RPC_URL, MNEE_ADDRESS } from "./constants.js";
+
 // DOM
 const backButton = document.getElementById("backButton");
 const titleEl = document.getElementById("title");
@@ -89,6 +92,44 @@ function formatDuration(seconds) {
   return parts.join(", ");
 }
 
+function maxPayoutMnee(pact) {
+  const prog = Array.isArray(pact?.progress_milestones)
+    ? pact.progress_milestones
+    : [];
+  const aon = Array.isArray(pact?.aon_rewards) ? pact.aon_rewards : [];
+
+  let max = 0;
+
+  for (const x of prog) {
+    const v = Number(x?.payout);
+    if (Number.isFinite(v) && v > max) max = v;
+  }
+  for (const x of aon) {
+    const v = Number(x?.payout);
+    if (Number.isFinite(v) && v > max) max = v;
+  }
+
+  // keep 2 decimals for display, but return number
+  return max;
+}
+
+async function getMneeBalanceAndDecimals(userAddress) {
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+
+  const ERC20_ABI = [
+    "function balanceOf(address) view returns (uint256)",
+    "function decimals() view returns (uint8)",
+  ];
+
+  const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
+  const [raw, decimals] = await Promise.all([
+    token.balanceOf(userAddress),
+    token.decimals(),
+  ]);
+
+  return { raw, decimals };
+}
+
 function renderPayments(label, enabled, items, isProgress) {
   if (!enabled) return `<div><strong>${label}:</strong> Disabled</div>`;
   if (!items || items.length === 0)
@@ -172,6 +213,12 @@ contentEl.innerHTML = `
     <div><strong>Created:</strong> ${formatEastern(p.created_at)}</div>
     <div><strong>Sponsor:</strong> ${prettyAddr(p.sponsor_address)}</div>
     <div><strong>Creator:</strong> ${prettyAddr(p.creator_address)}</div>
+    <div><strong>Video Link:</strong> ${
+      String(p.video_link || "").trim()
+        ? `<a href="${p.video_link}" target="_blank" rel="noopener noreferrer">${p.video_link}</a>`
+        : `<span style="opacity:0.7;">(not set)</span>`
+    }</div>
+
     <div><strong>Duration:</strong> ${formatDuration(p.duration_seconds)}</div>
 
     ${renderPayments(
@@ -193,7 +240,8 @@ contentEl.innerHTML = `
 const canInputVideoLink =
   mode === "created" &&
   normAddr(address) === normAddr(p.creator_address) &&
-  String(p.status) === "created";
+  String(p.status) === "created" &&
+  (!p.video_link || !String(p.video_link).trim());
 
 if (canInputVideoLink) {
   const videoBtn = document.createElement("button");
@@ -208,12 +256,121 @@ if (canInputVideoLink) {
   videoBtn.style.border = "none";
   videoBtn.style.cursor = "pointer";
 
-  videoBtn.onclick = () => {
-    // send them to your video link page (create this page next)
-    window.location.href = `./video-link.html?id=${encodeURIComponent(id)}`;
+  videoBtn.onclick = async () => {
+    const current = String(p.video_link || "").trim();
+    const link = prompt("Paste the video link:", current);
+    if (link == null) return;
+
+    const trimmed = String(link).trim();
+    if (!trimmed) return alert("Please enter a link.");
+    if (!/^https?:\/\/\S+$/i.test(trimmed)) {
+      return alert(
+        "Link must start with http:// or https:// and contain no spaces."
+      );
+    }
+
+    videoBtn.disabled = true;
+
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/pacts/${encodeURIComponent(id)}/video-link`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address, videoLink: trimmed }),
+        }
+      );
+
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) {
+        videoBtn.disabled = false;
+        return alert(d?.error || "Failed to save video link");
+      }
+
+      localStorage.setItem("pactsNeedsRefresh", "1");
+      window.location.reload();
+    } catch {
+      videoBtn.disabled = false;
+      alert("Save failed (backend not reachable).");
+    }
   };
 
   contentEl.appendChild(videoBtn);
+}
+
+// --- Approve + Fund button (ONLY sponsor, ONLY created view, ONLY when video_link is set) ---
+const canApproveAndFund =
+  mode === "created" &&
+  normAddr(address) === normAddr(p.sponsor_address) &&
+  String(p.status) === "created" &&
+  String(p.video_link || "").trim().length > 0;
+
+if (canApproveAndFund) {
+  const fundBtn = document.createElement("button");
+  fundBtn.type = "button";
+  fundBtn.innerText = "Approve and Fund";
+
+  fundBtn.style.marginTop = "10px";
+  fundBtn.style.marginLeft = "10px";
+  fundBtn.style.background = "#1f7a1f";
+  fundBtn.style.color = "white";
+  fundBtn.style.padding = "8px 14px";
+  fundBtn.style.borderRadius = "8px";
+  fundBtn.style.border = "none";
+  fundBtn.style.cursor = "pointer";
+
+  fundBtn.onclick = async () => {
+    // 1) Reminders / confirmation
+    const link = String(p.video_link || "").trim();
+    const required = maxPayoutMnee(p);
+
+    const msg =
+      `Before you approve and fund:\n\n` +
+      `• Verify the video link is correct (opens the right creator video):\n  ${
+        link || "(missing)"
+      }\n\n` +
+      `• This action is permanent.\n` +
+      `  After funding, cancelling the pact will require approval by BOTH parties.\n\n` +
+      `• Make sure you trust the counterparty address and pact terms.\n` +
+      `• Funding will lock up up to the maximum payout amount until the pact ends / settles.\n\n` +
+      `Max funding required: ${required.toFixed(2)} MNEE\n\n` +
+      `Continue?`;
+
+    const ok = confirm(msg);
+    if (!ok) return;
+
+    // 2) Balance check: sponsor must have >= max required
+    try {
+      if (!Number.isFinite(required) || required <= 0) {
+        alert("Cannot fund: pact has no valid payout amounts.");
+        return;
+      }
+
+      const { raw, decimals } = await getMneeBalanceAndDecimals(address);
+      const needRaw = ethers.parseUnits(required.toFixed(2), decimals);
+
+      if (raw < needRaw) {
+        const have = Number(ethers.formatUnits(raw, decimals));
+        alert(
+          `Insufficient MNEE.\n\n` +
+            `You have: ${have.toFixed(4)} MNEE\n` +
+            `You need at least: ${required.toFixed(2)} MNEE`
+        );
+        return;
+      }
+
+      // 3) For now: placeholder (since on-chain funding isn't built yet)
+      alert(
+        `Balance check passed.\n\n` +
+          `Next step: wire this button to on-chain approve + fund.\n` +
+          `Required max: ${required.toFixed(2)} MNEE`
+      );
+    } catch (e) {
+      alert(`Could not check MNEE balance.\n\n${e?.message || e}`);
+    }
+  };
+
+  contentEl.appendChild(fundBtn);
 }
 
 // --- Negotiate button (only counterparty, only awaiting review) ---
