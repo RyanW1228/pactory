@@ -2,13 +2,11 @@ import { ethers } from "./ethers-6.7.esm.min.js";
 import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
 
-
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",
   "function approve(address spender, uint256 amount) returns (bool)", // we must approve before funding
 ];
-
 
 // DOMs
 // const provider = new ethers.JsonRpcProvider(RPC_URL); // old line
@@ -92,7 +90,6 @@ if (!address) window.location.href = "./index.html";
 if (!localStorage.getItem(viewModeKey(address))) {
   localStorage.setItem(viewModeKey(address), "sponsor");
 }
-
 
 let progressMilestones = [{ views: "", payout: "" }]; // start with one
 let milestonesLocked = false;
@@ -275,6 +272,11 @@ function setViewOnly(el, on) {
 }
 
 function renderProgressMilestones() {
+  // ✅ guarantee at least one row
+  if (!Array.isArray(progressMilestones) || progressMilestones.length === 0) {
+    progressMilestones = [{ views: "", payout: "" }];
+  }
+
   progressMilestonesEl.innerHTML = progressMilestones
     .map((m, i) => {
       const isLatest = i === progressMilestones.length - 1;
@@ -424,6 +426,11 @@ function impliedRateText(i) {
 }
 
 function renderAonRewards() {
+  // ✅ guarantee at least one row
+  if (!Array.isArray(aonRewards) || aonRewards.length === 0) {
+    aonRewards = [{ views: "", payout: "" }];
+  }
+
   aonRewardsEl.innerHTML = aonRewards
     .map((m, i) => {
       const isLatest = i === aonRewards.length - 1;
@@ -478,6 +485,7 @@ function renderAonRewards() {
       `;
     })
     .join("");
+
   renderPayoutGraph();
 }
 
@@ -1149,26 +1157,13 @@ async function verifyEthOwnershipOrAlert() {
   return true;
 }
 
-
 async function initContracts() {
-  if (!window.ethereum) {
-    alert("MetaMask required");
-    return;
-  }
   provider = new ethers.BrowserProvider(window.ethereum);
   signer = await provider.getSigner();
 
-  escrow = new ethers.Contract(
-    PACT_ESCROW_ADDRESS,
-    PactEscrowABI,
-    signer
-  );
+  escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, signer);
 
-  mnee = new ethers.Contract(
-    MNEE_ADDRESS,
-    ERC20_ABI,
-    signer
-  );
+  mnee = new ethers.Contract(MNEE_ADDRESS, ERC20ABI, signer);
 }
 
 // Handlers
@@ -1211,11 +1206,14 @@ toggleRoleButton.onclick = () => {
   renderPayoutGraph();
 };
 
-async function fundPactOnChain(pactId, amountUsd){
+async function fundPactOnChain(pactId, amountUsd) {
   await initContracts();
 
   //convert dollars to MNEE (1 MNEE = $1.00)
-  const amountMnee = ethers.parseUnits(amountUsd.toString(), await mnee.decimals());
+  const amountMnee = ethers.parseUnits(
+    amountUsd.toString(),
+    await mnee.decimals()
+  );
 
   //approve the escrow contract to spend MNEE
   const approveTx = await mnee.approve(PACT_ESCROW_ADDRESS, amountMnee);
@@ -1382,8 +1380,6 @@ viewsSlider?.addEventListener("input", () => {
   renderPayoutGraph();
 });
 
-
-
 sendForReviewButton.onclick = async () => {
   setSendStatus("");
 
@@ -1514,40 +1510,38 @@ sendForReviewButton.onclick = async () => {
 
     try {
       data = await resp.json().catch(() => ({}));
-  } catch {
+    } catch {
       data = {};
-  }
+    }
     if (!resp.ok || !data.ok) {
       setSendStatus(
-    data?.error || `Failed to save pact (HTTP ${resp.status}).`
-   );
-    return;
-
-    if (data?.pactId) {
-      setPactName(address, data.pactId, pactName);
-    }
-
-    if (getRole(address) === "sponsor" && data?.pactId) {
-      const confirmed = confirm(
-        "Pact saved. Do you want to fund the pact now on-chain using MNEE tokens?"
+        data?.error || `Failed to save pact (HTTP ${resp.status}).`
       );
+      return;
 
-    if (confirmed) {
-      await fundPactOnChain(
-        data.pactId,
-        data.totalPayoutAtViews(maxThresholdViews())
-      );
-      alert("Pact funded successfully on-chain.");
+      if (data?.pactId) {
+        setPactName(address, data.pactId, pactName);
+      }
+
+      if (getRole(address) === "sponsor" && data?.pactId) {
+        const confirmed = confirm(
+          "Pact saved. Do you want to fund the pact now on-chain using MNEE tokens?"
+        );
+
+        if (confirmed) {
+          await fundPactOnChain(
+            data.pactId,
+            data.totalPayoutAtViews(maxThresholdViews())
+          );
+          alert("Pact funded successfully on-chain.");
+        }
+
+        setSendStatus("✓ Successfully saved. Redirecting...", true);
+        // redirect immediately
+        window.location.replace("./pacts-dashboard.html");
+        return;
+      }
     }
-
-    setSendStatus("✓ Successfully saved. Redirecting...", true);
-    // redirect immediately
-    window.location.replace("./pacts-dashboard.html");
-    return;
-
-  }
-}
-    
   } finally {
     // unlock UI (won’t matter if redirect happens)
     sendForReviewButton.disabled = false;
@@ -1556,24 +1550,12 @@ sendForReviewButton.onclick = async () => {
   }
 };
 
-async function handleCreatePact() {
-  const tx = await escrow.createPact(
-    counterpartyAddress,
-    ethers.parseUnits(maxPayoutUSD, 18),
-    durationSeconds
-  );
-
-  await tx.wait();
-  alert("Pact created!");
-}
-
-
 // Init
 // ✅ INIT — CORRECT ORDER
 renderRole();
 validateCounterparty();
-
-// FIRST: enable/disable sections (may reset state)
+renderProgressMilestones();
+updateMilestoneControlsVisibility();
 renderProgressPayEnabled();
 renderAonPayEnabled();
 

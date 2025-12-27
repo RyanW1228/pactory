@@ -72,7 +72,9 @@ CREATE TABLE IF NOT EXISTS pacts (
   aon_json TEXT NOT NULL,
 
   status TEXT NOT NULL,
-  replaces_pact_id INTEGER
+  replaces_pact_id INTEGER, 
+
+  video_link TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_pacts_status ON pacts(status);
@@ -95,6 +97,10 @@ if (!hasColumn("pacts", "name")) {
 
 if (!hasColumn("pacts", "replaces_pact_id")) {
   db.exec(`ALTER TABLE pacts ADD COLUMN replaces_pact_id INTEGER`);
+}
+
+if (!hasColumn("pacts", "video_link")) {
+  db.exec(`ALTER TABLE pacts ADD COLUMN video_link TEXT`);
 }
 
 // --------------------
@@ -368,6 +374,7 @@ app.get("/api/pacts", (req, res) => {
     }
 
     // bucket logic
+    // bucket logic
     if (bucket === "sent_for_review") {
       where +=
         (where ? " AND " : "") + "status=? AND lower(proposer_address)=?";
@@ -376,7 +383,20 @@ app.get("/api/pacts", (req, res) => {
       where +=
         (where ? " AND " : "") + "status=? AND lower(proposer_address)<>?";
       params.push("sent_for_review", addr);
+    } else if (bucket === "created_requires_video_link") {
+      // created + no video link yet
+      where +=
+        (where ? " AND " : "") +
+        "status=? AND (video_link IS NULL OR TRIM(video_link)='')";
+      params.push("created");
+    } else if (bucket === "created_requires_funding") {
+      // created + video link present
+      where +=
+        (where ? " AND " : "") +
+        "status=? AND (video_link IS NOT NULL AND TRIM(video_link)<> '')";
+      params.push("created");
     } else if (bucket === "created") {
+      // fallback (all created)
       where += (where ? " AND " : "") + "status=?";
       params.push("created");
     } else if (status) {
@@ -386,7 +406,7 @@ app.get("/api/pacts", (req, res) => {
 
     const rows = db
       .prepare(
-        `SELECT id, name, created_at, sponsor_address, creator_address, status, proposer_address, proposer_role
+        `SELECT id, name, created_at, sponsor_address, creator_address, status, proposer_address, proposer_role, video_link
          FROM pacts
          WHERE ${where}
          ORDER BY id DESC
@@ -471,6 +491,45 @@ app.post("/api/pacts/:id/accept", (req, res) => {
        SET status='created', updated_at=?
        WHERE id=? AND status='sent_for_review'`
     ).run(t, id);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+// Set video link (ONLY creator, ONLY when status='created')
+app.post("/api/pacts/:id/video-link", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw new Error("Invalid id");
+
+    const { address, videoLink } = req.body || {};
+    if (!address || !ethers.isAddress(address))
+      throw new Error("Invalid address");
+
+    const link = String(videoLink || "").trim();
+    if (!link) throw new Error("Video link is required");
+    if (link.length > 500) throw new Error("Video link too long");
+    if (!/^https?:\/\/\S+$/i.test(link)) throw new Error("Invalid link format");
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    if (String(pact.status) !== "created") {
+      throw new Error("Video link can only be set when pact is Created");
+    }
+
+    if (normAddr(pact.creator_address) !== normAddr(address)) {
+      throw new Error("Only the creator can set the video link");
+    }
+
+    const t = nowIso();
+    db.prepare(`UPDATE pacts SET video_link=?, updated_at=? WHERE id=?`).run(
+      link,
+      t,
+      id
+    );
 
     res.json({ ok: true });
   } catch (e) {

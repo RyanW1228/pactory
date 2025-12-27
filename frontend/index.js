@@ -6,31 +6,43 @@ const ESCROW_ADDRESS = "0xCB1ab619DC66DB20186bABABA7bEa2b2D3079Ecc";  // deploye
 
 let provider, signer, escrow, mnee;
 
+
+// DOM
 const connectButton = document.getElementById("connectButton");
+const logoutButton = document.getElementById("logoutButton");
+const viewPactsButton = document.getElementById("viewPactsButton");
+
 const accountSpan = document.getElementById("account");
 const balanceSpan = document.getElementById("ethBalance");
 const mneeBalanceSpan = document.getElementById("mneeBalance");
-const viewPactsButton = document.getElementById("viewPactsButton");
-const logoutButton = document.getElementById("logoutButton");
+
 const defaultModeText = document.getElementById("defaultModeText");
 const toggleDefaultModeButton = document.getElementById(
   "toggleDefaultModeButton"
 );
 
+// ABI (minimal)
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",
 ];
 
-await loadFromLocalStorage();
+function viewModeKey(address) {
+  return `pactViewMode:${address.toLowerCase()}`;
+}
 
-// Show correct buttons on load
-if (localStorage.getItem("address")) {
-  logoutButton.style.display = "inline-block";
-  connectButton.style.display = "none";
-} else {
-  logoutButton.style.display = "none";
-  connectButton.style.display = "inline-block";
+function getDefaultMode(address) {
+  return localStorage.getItem(viewModeKey(address)) || "sponsor";
+}
+
+function setDefaultMode(address, mode) {
+  localStorage.setItem(viewModeKey(address), mode);
+}
+
+function renderDefaultModeUI(address) {
+  const mode = getDefaultMode(address);
+  defaultModeText.innerText = mode === "sponsor" ? "Sponsor" : "Creator";
+  toggleDefaultModeButton.disabled = false;
 }
 
 async function showBalances(provider, address) {
@@ -103,6 +115,9 @@ async function loadFromLocalStorage() {
     mneeBalanceSpan.innerText = "-";
     defaultModeText.innerText = "-";
     toggleDefaultModeButton.disabled = true;
+
+    logoutButton.style.display = "none";
+    connectButton.style.display = "inline-block";
     return;
   }
 
@@ -112,38 +127,61 @@ async function loadFromLocalStorage() {
   const key = viewModeKey(stored);
   if (!localStorage.getItem(key)) localStorage.setItem(key, "sponsor");
 
+  // show correct buttons
+  logoutButton.style.display = "inline-block";
+  connectButton.style.display = "none";
+
   // paint balances + default view
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   await showBalances(provider, stored);
   renderDefaultModeUI(stored);
 }
 
-function viewModeKey(address) {
-  return `pactViewMode:${address.toLowerCase()}`;
-}
-
-function getDefaultMode(address) {
-  return localStorage.getItem(viewModeKey(address)) || "sponsor";
-}
-
-function setDefaultMode(address, mode) {
-  localStorage.setItem(viewModeKey(address), mode);
-}
-
-function renderDefaultModeUI(address) {
-  const mode = getDefaultMode(address);
-  defaultModeText.innerText = mode === "sponsor" ? "Sponsor" : "Creator";
-  toggleDefaultModeButton.disabled = false;
-}
-
-connectButton.onclick = connect;
-
-viewPactsButton.onclick = () => {
-  const address = localStorage.getItem("address");
-  if (!address) {
-    alert("Please connect a wallet first so we know which address to show.");
+async function connect() {
+  if (!window.ethereum) {
+    alert("Install MetaMask first.");
     return;
   }
+
+  // 🔴 FORCE account chooser every time
+  await window.ethereum.request({
+    method: "wallet_requestPermissions",
+    params: [{ eth_accounts: {} }],
+  });
+
+  const accounts = await window.ethereum.request({
+    method: "eth_requestAccounts",
+  });
+
+  const address = accounts?.[0];
+  if (!address) {
+    alert("No account selected.");
+    return;
+  }
+
+  // Persist address (soft login)
+  localStorage.setItem("address", address);
+  accountSpan.innerText = address;
+
+  connectButton.style.display = "none";
+  logoutButton.style.display = "inline-block";
+
+  // Default view per wallet
+  if (!localStorage.getItem(viewModeKey(address))) {
+    setDefaultMode(address, "sponsor");
+  }
+  renderDefaultModeUI(address);
+
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  await showBalances(provider, address);
+}
+
+// Handlers
+connectButton.onclick = () => connect().catch((e) => alert(e?.message || e));
+
+viewPactsButton.onclick = () => {
+  const addr = localStorage.getItem("address");
+  if (!addr) return alert("Connect a wallet first.");
   window.location.href = "./pacts-dashboard.html";
 };
 
@@ -162,11 +200,14 @@ logoutButton.onclick = () => {
 };
 
 toggleDefaultModeButton.onclick = () => {
-  const address = localStorage.getItem("address");
-  if (!address) return;
+  const addr = localStorage.getItem("address");
+  if (!addr) return;
 
-  const current = getDefaultMode(address);
+  const current = getDefaultMode(addr);
   const next = current === "sponsor" ? "creator" : "sponsor";
-  setDefaultMode(address, next);
-  renderDefaultModeUI(address);
+  setDefaultMode(addr, next);
+  renderDefaultModeUI(addr);
 };
+
+// Init
+loadFromLocalStorage().catch(() => {});
