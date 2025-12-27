@@ -29,7 +29,7 @@ contract PactEscrowTest is Test {
         mnee.approve(address(escrow), 100e18);
 
         // fund it!
-        escrow.fund(pactId);
+        escrow.fund(pactId, 100e18);
 
         // complete with partial payout...
         escrow.complete(pactId, 40e18);
@@ -49,7 +49,7 @@ contract PactEscrowTest is Test {
         uint256 pactId = escrow.createPact(creator, 50e18, 1 days);
 
         mnee.approve(address(escrow), 50e18);
-        escrow.fund(pactId);
+        escrow.fund(pactId, 50e18);
         vm.stopPrank();
 
         // warp beyond deadline
@@ -67,7 +67,7 @@ contract PactEscrowTest is Test {
         vm.startPrank(sponsor);
         uint256 pactId = escrow.createPact(creator, 10e18, 3 days);
         mnee.approve(address(escrow), 10e18);
-        escrow.fund(pactId);
+        escrow.fund(pactId, 10e18);
         vm.stopPrank();
 
         vm.expectRevert("not expired");
@@ -78,10 +78,10 @@ contract PactEscrowTest is Test {
         vm.startPrank(sponsor);
         uint256 pactId = escrow.createPact(creator, 10e18, 3 days);
         mnee.approve(address(escrow), 10e18);
-        escrow.fund(pactId);
+        escrow.fund(pactId, 10e18);
 
         vm.expectRevert("wrong status");
-        escrow.fund(pactId);
+        escrow.fund(pactId, 1e18);
         vm.stopPrank();
     }
 }
