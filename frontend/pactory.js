@@ -1506,42 +1506,27 @@ sendForReviewButton.onclick = async () => {
       return setSendStatus("Backend not reachable.");
     }
 
-    const data = await resp.json().catch(() => ({}));
-
+    let data = {};
     try {
-      data = await resp.json().catch(() => ({}));
+      data = await resp.json();
     } catch {
       data = {};
     }
+
     if (!resp.ok || !data.ok) {
-      setSendStatus(
+      return setSendStatus(
         data?.error || `Failed to save pact (HTTP ${resp.status}).`
       );
-      return;
-
-      if (data?.pactId) {
-        setPactName(address, data.pactId, pactName);
-      }
-
-      if (getRole(address) === "sponsor" && data?.pactId) {
-        const confirmed = confirm(
-          "Pact saved. Do you want to fund the pact now on-chain using MNEE tokens?"
-        );
-
-        if (confirmed) {
-          await fundPactOnChain(
-            data.pactId,
-            data.totalPayoutAtViews(maxThresholdViews())
-          );
-          alert("Pact funded successfully on-chain.");
-        }
-
-        setSendStatus("✓ Successfully saved. Redirecting...", true);
-        // redirect immediately
-        window.location.replace("./pacts-dashboard.html");
-        return;
-      }
     }
+
+    // success
+    if (data?.pactId) {
+      setPactName(address, data.pactId, pactName);
+    }
+
+    setSendStatus("✓ Successfully saved. Redirecting...", true);
+    window.location.replace("./pacts-dashboard.html");
+    return;
   } finally {
     // unlock UI (won’t matter if redirect happens)
     sendForReviewButton.disabled = false;
@@ -1550,23 +1535,31 @@ sendForReviewButton.onclick = async () => {
   }
 };
 
-// Init
-// ✅ INIT — CORRECT ORDER
-renderRole();
-validateCounterparty();
-renderProgressMilestones();
-updateMilestoneControlsVisibility();
-renderProgressPayEnabled();
-renderAonPayEnabled();
+(async () => {
+  try {
+    // If negotiating, load the pact FIRST (it fills the fields and locks stuff)
+    if (pageMode === "negotiate" && pactId) {
+      await loadNegotiatePactOrThrow(pactId);
+      return; // IMPORTANT: don't re-init everything and overwrite the loaded values
+    }
 
-// THEN: render their contents
-renderProgressMilestones();
-renderAonRewards();
+    // Normal "new pact" init
+    renderRole();
+    validateCounterparty();
 
-// THEN: controls + visuals
-updateMilestoneControlsVisibility();
-updateAonRewardControlsVisibility();
+    renderProgressPayEnabled();
+    renderAonPayEnabled();
 
-syncSliderBounds();
-updateSliderReadout();
-renderPayoutGraph();
+    renderProgressMilestones();
+    renderAonRewards();
+
+    updateMilestoneControlsVisibility();
+    updateAonRewardControlsVisibility();
+
+    syncSliderBounds();
+    updateSliderReadout();
+    renderPayoutGraph();
+  } catch (e) {
+    alert(`Init failed: ${e?.message || e}`);
+  }
+})();
