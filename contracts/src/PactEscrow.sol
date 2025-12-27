@@ -30,33 +30,47 @@ contract PactEscrow {
     mapping(uint256 => Pact) public pacts;
 
     // events 
-    event PactCreated(uint256 indexed pactId, address indexed sponsor, address indexed creator);
+    event PactCreated( uint256 indexed pactId, address indexed sponsor, address indexed creator, uint256 maxPayout, uint256 deadline);
     event PactFunded(uint256 indexed pactId, uint256 amount);
     event PactCompleted(uint256 indexed pactId, uint256 payout);
-    event PactRefunded(uint256 indexed pactId);
+    event PactRefunded(uint256 indexed pactId, uint256 amount);
 
     // side note i love how vs code is completing my code rn
 
     function createPact(
-        address creator,
-        uint256 maxPayout,
-        uint256 durationSeconds
-    ) external returns (uint256 pactId) {
+    uint256 pactId,
+    address creator,
+    uint256 maxPayout,
+    uint256 durationSeconds
+    ) external {
+        require(pactId > 0, "invalid pact id");
         require(creator != address(0), "invalid creator");
-        require(maxPayout > 0, "invalid payout");
+        require(maxPayout > 0, "invalid max payout");
+        require(durationSeconds > 0, "invalid duration");
 
-        pactId = ++pactCount;
+        // prevent overwriting
+        require(pacts[pactId].sponsor == address(0), "pact already exists");
+
+        uint256 deadline = block.timestamp + durationSeconds;
 
         pacts[pactId] = Pact({
             sponsor: msg.sender,
             creator: creator,
             maxPayout: maxPayout,
-            deadline: block.timestamp + durationSeconds,
+            deadline: deadline,
             status: Status.Created,
             fundedAmount: 0
         });
-        
-        emit PactCreated(pactId, msg.sender, creator);
+
+        pactCount++; // analytics only
+
+        emit PactCreated(
+            pactId,
+            msg.sender,
+            creator,
+            maxPayout,
+            deadline
+        );
     }
 
     function fund(uint256 pactId, uint256 amount) external {
@@ -117,7 +131,8 @@ contract PactEscrow {
             mnee.transfer(pact.sponsor, pact.fundedAmount),
             "refund failed"
         );
-        emit PactRefunded(pactId);
+        emit PactRefunded(pactId, pact.fundedAmount);
+
 }
 
 }
