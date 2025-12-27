@@ -6,7 +6,9 @@ import PactEscrowABI from "./abis/PactEscrow.json" assert { type: "json" };
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",
+  "function approve(address spender, uint256 amount) returns (bool)", // we must approve before funding
 ];
+
 
 // DOMs
 // const provider = new ethers.JsonRpcProvider(RPC_URL); // old line
@@ -1000,6 +1002,10 @@ async function verifyEthOwnershipOrAlert() {
 
 
 async function initContracts() {
+  if (!window.ethereum) {
+    alert("MetaMask required");
+    return;
+  }
   provider = new ethers.BrowserProvider(window.ethereum);
   signer = await provider.getSigner();
 
@@ -1011,7 +1017,7 @@ async function initContracts() {
 
   mnee = new ethers.Contract(
     MNEE_ADDRESS,
-    ERC20ABI,
+    ERC20_ABI,
     signer
   );
 }
@@ -1055,6 +1061,23 @@ toggleRoleButton.onclick = () => {
   updateSliderReadout();
   renderPayoutGraph();
 };
+
+async function fundPactOnChain(pactId, amountUsd){
+  await initContracts();
+
+  //convert dollars to MNEE (1 MNEE = $1.00)
+  const amountMnee = ethers.parseUnits(amountUsd.toString(), await mnee.decimals());
+
+  //approve the escrow contract to spend MNEE
+  const approveTx = await mnee.approve(PACT_ESCROW_ADDRESS, amountMnee);
+  await approveTx.wait();
+
+  //fund the pact
+  const fundTx = await escrow.fund(pactId, amountMnee);
+  await fundTx.wait();
+
+  return true;
+}
 
 counterpartyInput.addEventListener("input", validateCounterparty);
 
@@ -1351,6 +1374,17 @@ sendForReviewButton.onclick = async () => {
     setPactName(address, data.pactId, pactName);
   }
 
+  if (getRole(address) === "sponsor") {
+    const confirmed = confirm(
+      "Pact Saved. Do you want to fund the pact now on-chain using MNEE tokens?"
+    );
+
+    if (confirmed) {
+      await fundPactOnChain(data.pactId, data.totalPayoutAtViews(maxThresholdViews()));
+      alert("Pact funded successfully on-chain.");
+    }
+  
+
   alert("Successfully saved");
   window.location.href = "./pacts-dashboard.html";
 
@@ -1370,3 +1404,4 @@ renderAonPayEnabled();
 renderPayoutGraph();
 syncSliderBounds();
 updateSliderReadout();
+}
