@@ -29,6 +29,51 @@ function prettyAddr(a) {
   return a;
 }
 
+function prettyStatus(s) {
+  if (!s) return "";
+  return String(s)
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function formatEastern(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  }).format(d);
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || isNaN(seconds)) return "";
+  let s = Math.max(0, Number(seconds));
+
+  const days = Math.floor(s / 86400);
+  s %= 86400;
+  const hours = Math.floor(s / 3600);
+  s %= 3600;
+  const minutes = Math.floor(s / 60);
+  const secs = Math.floor(s % 60);
+
+  const parts = [];
+  if (days) parts.push(`${days} day${days === 1 ? "" : "s"}`);
+  if (hours) parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+  if (minutes) parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+  if (secs || parts.length === 0)
+    parts.push(`${secs} second${secs === 1 ? "" : "s"}`);
+
+  return parts.join(", ");
+}
+
 function renderPayments(label, enabled, items, isProgress) {
   if (!enabled) return `<div><strong>${label}:</strong> Disabled</div>`;
   if (!items || items.length === 0)
@@ -64,19 +109,17 @@ if (!res.ok || !data.ok) {
 
 const p = data.pact;
 
+// ✅ Title shows the DB name (shared across both parties/devices)
+titleEl.innerText = String(p.name || "").trim() ? p.name : `Pact #${p.id}`;
+
 // Render
-titleEl.innerText = `Pact #${p.id}`;
 contentEl.innerHTML = `
   <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
-    <div><strong>Status:</strong> ${p.status}</div>
-    <div><strong>Created:</strong> ${p.created_at}</div>
+    <div><strong>Status:</strong> ${prettyStatus(p.status)}</div>
+    <div><strong>Created:</strong> ${formatEastern(p.created_at)}</div>
     <div><strong>Sponsor:</strong> ${prettyAddr(p.sponsor_address)}</div>
     <div><strong>Creator:</strong> ${prettyAddr(p.creator_address)}</div>
-    <div><strong>Proposer role:</strong> ${p.proposer_role}</div>
-    <div><strong>Proposer address:</strong> ${prettyAddr(
-      p.proposer_address
-    )}</div>
-    <div><strong>Duration (seconds):</strong> ${p.duration_seconds}</div>
+    <div><strong>Duration:</strong> ${formatDuration(p.duration_seconds)}</div>
 
     ${renderPayments(
       "Progress Pay",
@@ -90,10 +133,6 @@ contentEl.innerHTML = `
       p.aon_rewards,
       false
     )}
-  </div>
-
-  <div style="margin-top:12px; font-size:12px; opacity:0.8;">
-    View-only: editing will be added later.
   </div>
 `;
 
@@ -136,8 +175,6 @@ if (actionLabel) {
       );
 
       const delData = await delRes.json().catch(() => ({}));
-
-      // If it's already gone, treat that as success for UX
       const err = String(delData?.error || "");
       const alreadyGone = err.toLowerCase().includes("not found");
 
@@ -149,7 +186,6 @@ if (actionLabel) {
         return;
       }
 
-      // Always redirect back to dashboard and force refresh
       localStorage.setItem("pactsNeedsRefresh", "1");
       window.location.replace("./pacts-dashboard.html");
     } catch (e) {

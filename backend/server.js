@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS pacts (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
 
+  -- ✅ shared canonical name for both parties
+  name TEXT NOT NULL,
+
   creator_address TEXT NOT NULL,
   sponsor_address TEXT NOT NULL,
 
@@ -43,6 +46,22 @@ CREATE INDEX IF NOT EXISTS idx_pacts_sponsor ON pacts(sponsor_address);
 CREATE INDEX IF NOT EXISTS idx_pacts_creator ON pacts(creator_address);
 `);
 
+// --- migration: add name column for existing DBs ---
+function hasColumn(table, col) {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all();
+  return rows.some((r) => String(r.name).toLowerCase() === col.toLowerCase());
+}
+if (!hasColumn("pacts", "name")) {
+  // SQLite supports ADD COLUMN, but not IF NOT EXISTS.
+  db.exec(`ALTER TABLE pacts ADD COLUMN name TEXT`);
+  // Backfill for existing rows so NOT NULL logic isn't needed for old entries
+  db.exec(
+    `UPDATE pacts SET name = 'Untitled Pact' WHERE name IS NULL OR TRIM(name) = ''`
+  );
+  // Optional: You can't easily add NOT NULL constraint after the fact in SQLite without rebuild.
+  // We enforce name required at write-time below.
+}
+
 // --- helpers ---
 function nowIso() {
   return new Date().toISOString();
@@ -65,12 +84,20 @@ function verifySignatureOrThrow({ message, signature, expectedAddress }) {
   }
 }
 
+function requireName(name) {
+  const n = String(name || "").trim();
+  if (!n) throw new Error("Pact name is required");
+  if (n.length > 60) throw new Error("Pact name must be 60 characters or less");
+  return n;
+}
+
 // --- routes ---
 
 // Create pact (Sent for Review)
 app.post("/api/pacts", (req, res) => {
   try {
     const {
+      name, // ✅ NEW
       proposerAddress,
       proposerRole, // 'sponsor' or 'creator'
       counterpartyAddress,
@@ -87,6 +114,8 @@ app.post("/api/pacts", (req, res) => {
       message,
       signature,
     } = req.body;
+
+    const pactName = requireName(name);
 
     // Basic validation
     const proposer = requireAddress(proposerAddress, "proposer");
@@ -127,9 +156,11 @@ app.post("/api/pacts", (req, res) => {
     const creatorAddress = proposerRole === "creator" ? proposer : counterparty;
 
     const t = nowIso();
+
     const stmt = db.prepare(`
       INSERT INTO pacts (
         created_at, updated_at,
+        name,
         creator_address, sponsor_address,
         proposer_role, proposer_address,
         counterparty_address,
@@ -137,12 +168,13 @@ app.post("/api/pacts", (req, res) => {
         progress_enabled, progress_locked, progress_json,
         aon_enabled, aon_locked, aon_json,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const info = stmt.run(
       t,
       t,
+      pactName,
       creatorAddress,
       sponsorAddress,
       proposerRole,
@@ -164,7 +196,7 @@ app.post("/api/pacts", (req, res) => {
   }
 });
 
-// List pacts for dashboard sections (we’ll start with sent_for_review)
+// List pacts for dashboard sections
 app.get("/api/pacts", (req, res) => {
   try {
     const { address, role, status, bucket } = req.query;
@@ -187,7 +219,7 @@ app.get("/api/pacts", (req, res) => {
       throw new Error("role must be sponsor or creator");
     }
 
-    // bucket logic (maps to underlying status but differs by proposer vs counterparty)
+    // bucket logic
     if (bucket === "sent_for_review") {
       where +=
         (where ? " AND " : "") + "status=? AND lower(proposer_address)=?";
@@ -197,14 +229,13 @@ app.get("/api/pacts", (req, res) => {
         (where ? " AND " : "") + "status=? AND lower(proposer_address)<>?";
       params.push("sent_for_review", addr);
     } else if (status) {
-      // fallback: raw status filter if you still want it
       where += (where ? " AND " : "") + "status=?";
       params.push(String(status));
     }
 
     const rows = db
       .prepare(
-        `SELECT id, created_at, sponsor_address, creator_address, status, proposer_address, proposer_role
+        `SELECT id, name, created_at, sponsor_address, creator_address, status, proposer_address, proposer_role
          FROM pacts
          WHERE ${where}
          ORDER BY id DESC
