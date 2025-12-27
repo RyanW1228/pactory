@@ -59,7 +59,6 @@ contract PactEscrow {
         emit PactCreated(pactId, msg.sender, creator);
     }
 
-
     function fund(uint256 pactId, uint256 amount) external {
         Pact storage pact = pacts[pactId];
 
@@ -80,6 +79,7 @@ contract PactEscrow {
             mnee.transferFrom(msg.sender, address(this), amount),
             "funding failed"
         );
+        emit PactFunded(pactId, amount);
     }
 
 
@@ -97,23 +97,27 @@ contract PactEscrow {
             "payout failed"
         );
 
-        if (pact.maxPayout > payout) {
-            mnee.transfer(pact.sponsor, pact.maxPayout - payout);
+        uint256 remainder = pact.fundedAmount - payout;
+
+        if (remainder > 0) {
+            mnee.transfer(pact.sponsor, remainder);
         }
+        emit PactCompleted(pactId, payout);
     }
 
     function refund(uint256 pactId) external {
-    Pact storage pact = pacts[pactId];
+        Pact storage pact = pacts[pactId];
 
-    require(block.timestamp > pact.deadline, "not expired");
-    require(pact.status == Status.Funded, "wrong status");
+        require(block.timestamp > pact.deadline, "not expired");
+        require(pact.status == Status.Funded, "wrong status");
 
-    pact.status = Status.Refunded;
+        pact.status = Status.Refunded;
 
-    require(
-        mnee.transfer(pact.sponsor, pact.fundedAmount),
-        "refund failed"
-    );
+        require(
+            mnee.transfer(pact.sponsor, pact.fundedAmount),
+            "refund failed"
+        );
+        emit PactRefunded(pactId);
 }
 
 }
