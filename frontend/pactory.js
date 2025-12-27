@@ -1,5 +1,7 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
 import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
+import PactEscrowABI from "./abis/PactEscrow.json" assert { type: "json" };
+
 
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -14,6 +16,7 @@ const exitButton = document.getElementById("exitButton");
 
 const defaultRoleText = document.getElementById("defaultRoleText");
 const toggleRoleButton = document.getElementById("toggleRoleButton");
+const fundPactTestButton = document.getElementById("fundPactTestButton");
 
 const counterpartyLabel = document.getElementById("counterpartyLabel");
 const counterpartyInput = document.getElementById("counterpartyInput");
@@ -1350,18 +1353,9 @@ sendForReviewButton.onclick = async () => {
 
   alert("Successfully saved");
   window.location.href = "./pacts-dashboard.html";
+
+  
 };
-
-async function handleCreatePact() {
-  const tx = await escrow.createPact(
-    counterpartyAddress,
-    ethers.parseUnits(maxPayoutUSD, 18),
-    durationSeconds
-  );
-
-  await tx.wait();
-  alert("Pact created!");
-}
 
 
 // Init
