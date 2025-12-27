@@ -2,48 +2,86 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/Pact.sol";
-import "../src/MockMNEE.sol";
+import "../src/PactEscrow.sol";
+import "../src/mockMNEE.sol";
 
-contract PactTest is Test {
+contract PactEscrowTest is Test {
     MockMNEE mnee;
-    Pact pact;
+    PactEscrow escrow;
 
-    address sponsor = address(0xA);
-    address escrow = address(this);
+    address sponsor = address(0xA11CE);
+    address creator = address(0xB0B);
 
     function setUp() public {
         mnee = new MockMNEE();
+        escrow = new PactEscrow(address(mnee));
 
-        // Mint 100 MNEE to escrow
-        mnee.mint(escrow, 100 ether);
-
-        // Deploy pact
-        pact = new Pact(address(mnee), sponsor, 100 ether);
-
-        // Fund pact escrow
-        mnee.transfer(address(pact), 100 ether);
+        // Give sponsor some MNEE!!!!! yayayyayay
+        mnee.mint(sponsor, 1_000e18);
     }
 
-    function testRefundReturnsUnearnedFunds() public {
-        // Creator earned 40
-        pact.setEarned(40 ether);
+    function testFundAndCompletePartial() public {
+        // sponsor creates da pact
+        vm.startPrank(sponsor);
+        uint256 pactId = escrow.createPact(creator, 100e18, 7 days);
 
-        uint256 sponsorBefore = mnee.balanceOf(sponsor);
+        // approve escrow to pull the funds
+        mnee.approve(address(escrow), 100e18);
 
-        pact.refund();
+        // fund it!
+        escrow.fund(pactId);
 
-        uint256 sponsorAfter = mnee.balanceOf(sponsor);
+        // complete with partial payout...
+        escrow.complete(pactId, 40e18);
+        vm.stopPrank();
 
-        assertEq(sponsorAfter - sponsorBefore, 60 ether);
-        assertTrue(pact.refunded());
+        // check balances
+        assertEq(mnee.balanceOf(creator), 40e18, "creator payout wrong");
+        assertEq(mnee.balanceOf(sponsor), 1_000e18 - 100e18 + 60e18, "sponsor remainder wrong");
+
+        // status check
+        (, , , , PactEscrow.Status status, ) = escrow.pacts(pactId);
+        assertEq(uint256(status), uint256(PactEscrow.Status.Completed), "status not completed");
     }
 
-    function testCannotRefundTwice() public {
-        pact.setEarned(20 ether);
-        pact.refund();
+    function testRefundAfterDeadline() public {
+        vm.startPrank(sponsor);
+        uint256 pactId = escrow.createPact(creator, 50e18, 1 days);
 
-        vm.expectRevert("already refunded");
-        pact.refund();
+        mnee.approve(address(escrow), 50e18);
+        escrow.fund(pactId);
+        vm.stopPrank();
+
+        // warp beyond deadline
+        vm.warp(block.timestamp + 2 days);
+
+        // refund
+        escrow.refund(pactId);
+
+        assertEq(mnee.balanceOf(sponsor), 1_000e18, "sponsor should be fully refunded");
+        (, , , , PactEscrow.Status status, ) = escrow.pacts(pactId);
+        assertEq(uint256(status), uint256(PactEscrow.Status.Refunded), "status not refunded");
+    }
+
+    function testCannotRefundEarly() public {
+        vm.startPrank(sponsor);
+        uint256 pactId = escrow.createPact(creator, 10e18, 3 days);
+        mnee.approve(address(escrow), 10e18);
+        escrow.fund(pactId);
+        vm.stopPrank();
+
+        vm.expectRevert("not expired");
+        escrow.refund(pactId);
+    }
+
+    function testCannotFundTwice() public {
+        vm.startPrank(sponsor);
+        uint256 pactId = escrow.createPact(creator, 10e18, 3 days);
+        mnee.approve(address(escrow), 10e18);
+        escrow.fund(pactId);
+
+        vm.expectRevert("wrong status");
+        escrow.fund(pactId);
+        vm.stopPrank();
     }
 }

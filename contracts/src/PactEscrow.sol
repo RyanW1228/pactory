@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-interface IERC20 {
-    function transfer(address to, uint256 amount) external returns (bool);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-}
+import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 contract PactEscrow {
     IERC20 public immutable mnee;
@@ -32,6 +29,14 @@ contract PactEscrow {
     uint256 public pactCount;
     mapping(uint256 => Pact) public pacts;
 
+    // events 
+    event PactCreated(uint256 indexed pactId, address indexed sponsor, address indexed creator);
+    event PactFunded(uint256 indexed pactId, uint256 amount);
+    event PactCompleted(uint256 indexed pactId, uint256 payout);
+    event PactRefunded(uint256 indexed pactId);
+
+    // side note i love how vs code is completing my code rn
+
     function createPact(
         address creator,
         uint256 maxPayout,
@@ -50,14 +55,40 @@ contract PactEscrow {
             status: Status.Created,
             fundedAmount: 0
         });
+        
+        emit PactCreated(pactId, msg.sender, creator);
     }
+
+
+    function fund(uint256 pactId, uint256 amount) external {
+        Pact storage pact = pacts[pactId];
+
+        require(msg.sender == pact.sponsor, "not sponsor");
+        require(pact.status == Status.Created, "wrong status");
+        require(
+            pact.fundedAmount + amount <= pact.maxPayout,
+            "exceeds max"
+        );
+
+        pact.fundedAmount += amount;
+
+        if (pact.fundedAmount == pact.maxPayout) {
+            pact.status = Status.Funded;
+        }
+
+        require(
+            mnee.transferFrom(msg.sender, address(this), amount),
+            "funding failed"
+        );
+    }
+
 
     function complete(uint256 pactId, uint256 payout) external {
         Pact storage pact = pacts[pactId];
 
         require(msg.sender == pact.sponsor, "not sponsor");
         require(pact.status == Status.Funded, "wrong status");
-        require(payout <= pact.maxPayout, "exceeds max");
+        require(payout <= pact.fundedAmount, "exceeds max");
 
         pact.status = Status.Completed;
 
