@@ -1,10 +1,19 @@
 // Config
-const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
+//const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
+const API_BASE = "http://localhost:3000";
 
 // DOM
 const backButton = document.getElementById("backButton");
 const titleEl = document.getElementById("title");
 const contentEl = document.getElementById("content");
+
+// Guard: required DOM
+if (!backButton || !titleEl || !contentEl) {
+  alert(
+    "pact-view.html is missing required elements (backButton/title/content)."
+  );
+  throw new Error("Missing required DOM elements");
+}
 
 // Nav
 backButton.onclick = () => history.back();
@@ -18,13 +27,19 @@ const address = localStorage.getItem("address");
 if (!address) {
   alert("Not logged in");
   history.back();
+  throw new Error("Not logged in");
 }
 if (!id) {
   alert("Missing pact id");
   history.back();
+  throw new Error("Missing pact id");
 }
 
 // Helpers
+function normAddr(a) {
+  return String(a || "").toLowerCase();
+}
+
 function prettyAddr(a) {
   return a;
 }
@@ -109,10 +124,48 @@ if (!res.ok || !data.ok) {
 
 const p = data.pact;
 
+// ---- Replaced pact dropdown ----
+const replacedDetails = document.getElementById("replacedPactDetails");
+const replacedBody = document.getElementById("replacedPactBody");
+
+if (data.replaced_pact) {
+  replacedDetails.style.display = "block";
+
+  const rp = data.replaced_pact;
+
+  replacedBody.innerHTML = `
+    <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
+      <div><strong>Name:</strong> ${rp.name || "Untitled Pact"}</div>
+      <div><strong>Status:</strong> ${rp.status}</div>
+      <div><strong>Sponsor:</strong> ${rp.sponsor_address}</div>
+      <div><strong>Creator:</strong> ${rp.creator_address}</div>
+      <div><strong>Duration:</strong> ${formatDuration(
+        rp.duration_seconds
+      )}</div>
+
+      ${renderPayments(
+        "Progress Pay",
+        !!rp.progress_enabled,
+        rp.progress_milestones,
+        true
+      )}
+
+      ${renderPayments(
+        "All-or-Nothing Pay",
+        !!rp.aon_enabled,
+        rp.aon_rewards,
+        false
+      )}
+    </div>
+  `;
+} else {
+  replacedDetails.style.display = "none";
+}
+
 // ✅ Title shows the DB name (shared across both parties/devices)
 titleEl.innerText = String(p.name || "").trim() ? p.name : `Pact #${p.id}`;
 
-// Render
+// Render main content
 contentEl.innerHTML = `
   <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
     <div><strong>Status:</strong> ${prettyStatus(p.status)}</div>
@@ -136,10 +189,125 @@ contentEl.innerHTML = `
   </div>
 `;
 
+// --- Input Video Link button (ONLY creator, ONLY created view) ---
+const canInputVideoLink =
+  mode === "created" &&
+  normAddr(address) === normAddr(p.creator_address) &&
+  String(p.status) === "created";
+
+if (canInputVideoLink) {
+  const videoBtn = document.createElement("button");
+  videoBtn.type = "button";
+  videoBtn.innerText = "Input Video Link";
+
+  videoBtn.style.marginTop = "10px";
+  videoBtn.style.background = "#2c3e50";
+  videoBtn.style.color = "white";
+  videoBtn.style.padding = "8px 14px";
+  videoBtn.style.borderRadius = "8px";
+  videoBtn.style.border = "none";
+  videoBtn.style.cursor = "pointer";
+
+  videoBtn.onclick = () => {
+    // send them to your video link page (create this page next)
+    window.location.href = `./video-link.html?id=${encodeURIComponent(id)}`;
+  };
+
+  contentEl.appendChild(videoBtn);
+}
+
+// --- Negotiate button (only counterparty, only awaiting review) ---
+const canNegotiate =
+  mode === "awaiting" &&
+  normAddr(address) === normAddr(p.counterparty_address) &&
+  String(p.status) === "sent_for_review";
+
+const canAccept =
+  mode === "awaiting" &&
+  normAddr(address) === normAddr(p.counterparty_address) &&
+  String(p.status) === "sent_for_review";
+
+if (canNegotiate) {
+  const negotiateBtn = document.createElement("button");
+  negotiateBtn.type = "button";
+  negotiateBtn.innerText = "Negotiate Pact";
+
+  negotiateBtn.style.marginTop = "10px";
+  negotiateBtn.style.background = "#2c3e50";
+  negotiateBtn.style.color = "white";
+  negotiateBtn.style.padding = "8px 14px";
+  negotiateBtn.style.borderRadius = "8px";
+  negotiateBtn.style.border = "none";
+  negotiateBtn.style.cursor = "pointer";
+
+  negotiateBtn.onclick = () => {
+    window.location.href = `./pactory.html?mode=negotiate&id=${encodeURIComponent(
+      id
+    )}`;
+  };
+
+  contentEl.appendChild(negotiateBtn);
+}
+
+if (canAccept) {
+  const acceptBtn = document.createElement("button");
+  acceptBtn.type = "button";
+  acceptBtn.innerText = "Accept Pact";
+
+  acceptBtn.style.marginTop = "10px";
+  acceptBtn.style.marginLeft = "10px";
+  acceptBtn.style.background = "#1f7a1f";
+  acceptBtn.style.color = "white";
+  acceptBtn.style.padding = "8px 14px";
+  acceptBtn.style.borderRadius = "8px";
+  acceptBtn.style.border = "none";
+  acceptBtn.style.cursor = "pointer";
+
+  acceptBtn.onclick = async () => {
+    const ok = confirm("Accept this pact? This will mark it as Created.");
+    if (!ok) return;
+
+    acceptBtn.disabled = true;
+    acceptBtn.style.opacity = "0.7";
+    acceptBtn.style.cursor = "not-allowed";
+
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/pacts/${encodeURIComponent(id)}/accept`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address }),
+        }
+      );
+
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) {
+        alert(d?.error || "Failed to accept pact");
+        acceptBtn.disabled = false;
+        acceptBtn.style.opacity = "1";
+        acceptBtn.style.cursor = "pointer";
+        return;
+      }
+
+      localStorage.setItem("pactsNeedsRefresh", "1");
+      window.location.replace("./pacts-dashboard.html");
+    } catch {
+      alert("Accept failed (backend not reachable).");
+      acceptBtn.disabled = false;
+      acceptBtn.style.opacity = "1";
+      acceptBtn.style.cursor = "pointer";
+    }
+  };
+
+  contentEl.appendChild(acceptBtn);
+}
+
 // Action button
 let actionLabel = null;
-if (mode === "sent") actionLabel = "Delete Pact";
-if (mode === "awaiting") actionLabel = "Reject Pact";
+if (mode === "sent") actionLabel = "Delete";
+if (mode === "awaiting") actionLabel = "Reject";
+if (mode === "created") actionLabel = "Delete";
 
 if (actionLabel) {
   const btn = document.createElement("button");
@@ -155,11 +323,12 @@ if (actionLabel) {
   btn.style.cursor = "pointer";
 
   btn.onclick = async () => {
-    const ok = confirm(
-      actionLabel === "Delete Pact"
-        ? "Are you sure you want to delete this pact?"
-        : "Are you sure you want to reject this pact?"
-    );
+    const msg =
+      actionLabel === "Reject"
+        ? "Are you sure you want to reject this pact?"
+        : "Are you sure you want to delete this pact?";
+
+    const ok = confirm(msg);
     if (!ok) return;
 
     btn.disabled = true;
@@ -167,19 +336,21 @@ if (actionLabel) {
     btn.style.cursor = "not-allowed";
 
     try {
-      const delRes = await fetch(
-        `${API_BASE}/api/pacts/${encodeURIComponent(
-          id
-        )}?address=${encodeURIComponent(address)}`,
-        { method: "DELETE" }
-      );
+      // ✅ choose correct endpoint
+      const endpoint =
+        mode === "created"
+          ? `${API_BASE}/api/pacts/${encodeURIComponent(
+              id
+            )}/created?address=${encodeURIComponent(address)}`
+          : `${API_BASE}/api/pacts/${encodeURIComponent(
+              id
+            )}?address=${encodeURIComponent(address)}`;
 
+      const delRes = await fetch(endpoint, { method: "DELETE" });
       const delData = await delRes.json().catch(() => ({}));
-      const err = String(delData?.error || "");
-      const alreadyGone = err.toLowerCase().includes("not found");
 
-      if ((!delRes.ok || !delData.ok) && !alreadyGone) {
-        alert(delData?.error || "Failed to delete pact");
+      if (!delRes.ok || !delData.ok) {
+        alert(delData?.error || "Failed");
         btn.disabled = false;
         btn.style.opacity = "1";
         btn.style.cursor = "pointer";
@@ -189,7 +360,7 @@ if (actionLabel) {
       localStorage.setItem("pactsNeedsRefresh", "1");
       window.location.replace("./pacts-dashboard.html");
     } catch (e) {
-      alert("Delete failed (backend not reachable).");
+      alert("Request failed (backend not reachable).");
       btn.disabled = false;
       btn.style.opacity = "1";
       btn.style.cursor = "pointer";

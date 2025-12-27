@@ -2,7 +2,8 @@ import { ethers } from "./ethers-6.7.esm.min.js";
 import { RPC_URL, MNEE_ADDRESS } from "./constants.js";
 
 // Config
-const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
+//const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
+const API_BASE = "http://localhost:3000";
 
 // Session
 const address = localStorage.getItem("address");
@@ -65,8 +66,10 @@ function setViewMode(mode) {
 
   renderSections(mode);
 
+  // load sections that actually query backend
   loadSentForReview(mode);
   loadAwaitingYourReview(mode);
+  loadCreated(mode);
 }
 
 function formatEastern(iso) {
@@ -112,12 +115,55 @@ async function refreshDashboard() {
 function attachManageHandler(listEl) {
   if (!listEl) return;
 
-  listEl.onclick = (e) => {
+  listEl.onclick = async (e) => {
+    // 1) Delete (created)
+    const delBtn = e.target.closest("[data-delete-created]");
+    if (delBtn) {
+      const pactId = delBtn.getAttribute("data-delete-created");
+      if (!pactId) return;
+
+      const ok = confirm("Delete this pact?\n\nThis cannot be undone.");
+      if (!ok) return;
+
+      delBtn.disabled = true;
+      delBtn.style.opacity = "0.7";
+      delBtn.style.cursor = "not-allowed";
+
+      try {
+        const resp = await fetch(
+          `${API_BASE}/api/pacts/${encodeURIComponent(
+            pactId
+          )}/created?address=${encodeURIComponent(address)}`,
+          { method: "DELETE" }
+        );
+
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          alert(data?.error || "Failed to delete pact");
+          delBtn.disabled = false;
+          delBtn.style.opacity = "1";
+          delBtn.style.cursor = "pointer";
+          return;
+        }
+
+        // refresh dashboard
+        localStorage.setItem("pactsNeedsRefresh", "1");
+        await refreshDashboard();
+      } catch (err) {
+        alert("Delete failed (backend not reachable).");
+        delBtn.disabled = false;
+        delBtn.style.opacity = "1";
+        delBtn.style.cursor = "pointer";
+      }
+      return;
+    }
+
+    // 2) Open pact view
     const btn = e.target.closest("[data-open-pact]");
     if (!btn) return;
 
     const pactId = btn.getAttribute("data-open-pact");
-    const m = btn.getAttribute("data-open-mode"); // "sent" | "awaiting"
+    const m = btn.getAttribute("data-open-mode"); // "sent" | "awaiting" | "created"
     if (!pactId || !m) return;
 
     window.location.href = `./pact-view.html?id=${encodeURIComponent(
@@ -146,7 +192,7 @@ async function loadSentForReview(mode) {
     )}&role=${encodeURIComponent(mode)}&bucket=sent_for_review`;
 
     const res = await fetch(url);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
     countEl.innerText = `(${data?.rows?.length || 0})`;
 
@@ -203,7 +249,7 @@ async function loadAwaitingYourReview(mode) {
     )}&role=${encodeURIComponent(mode)}&bucket=awaiting_your_review`;
 
     const res = await fetch(url);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
     countEl.innerText = `(${data?.rows?.length || 0})`;
 
@@ -240,6 +286,67 @@ async function loadAwaitingYourReview(mode) {
       .join("");
   } catch (e) {
     console.log("Awaiting Your Review load failed:", e);
+    countEl.innerText = "(0)";
+    listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
+  }
+}
+
+// Created (both parties)
+// Sponsor section id: "created"
+// Creator section id: "created-requires-video-link"
+async function loadCreated(mode) {
+  const sectionId =
+    mode === "sponsor" ? "created" : "created-requires-video-link";
+
+  const listEl = document.getElementById(`list-${sectionId}`);
+  const countEl = document.getElementById(`count-${sectionId}`);
+  if (!listEl || !countEl) return;
+
+  attachManageHandler(listEl);
+
+  try {
+    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
+      address
+    )}&role=${encodeURIComponent(mode)}&bucket=created`;
+
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+
+    countEl.innerText = `(${data?.rows?.length || 0})`;
+
+    if (
+      !res.ok ||
+      !data.ok ||
+      !Array.isArray(data.rows) ||
+      data.rows.length === 0
+    ) {
+      listEl.innerHTML = `<p class="empty">No pacts yet.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = data.rows
+      .map((p) => {
+        const other =
+          mode === "sponsor" ? p.creator_address : p.sponsor_address;
+
+        return `
+          <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+            <div style="font-weight:600;">${displayPactTitle(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
+              p.created_at
+            )}</div>
+            <button type="button" data-open-pact="${
+              p.id
+            }" data-open-mode="created" style="margin-top:8px;">
+              Manage
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+  } catch (e) {
+    console.log("Created load failed:", e);
     countEl.innerText = "(0)";
     listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
   }

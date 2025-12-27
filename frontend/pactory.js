@@ -52,9 +52,29 @@ const viewsSlider = document.getElementById("viewsSlider");
 const sliderViewsLabel = document.getElementById("sliderViewsLabel");
 const sliderPayoutLabel = document.getElementById("sliderPayoutLabel");
 
+const sendForReviewStatus = document.getElementById("sendForReviewStatus");
 const sendForReviewButton = document.getElementById("sendForReviewButton");
 
-const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
+if (!sendForReviewButton) {
+  alert("Missing #sendForReviewButton in DOM");
+  throw new Error("Missing #sendForReviewButton");
+}
+
+function setSendStatus(msg, ok = false) {
+  if (!sendForReviewStatus) return;
+  sendForReviewStatus.innerText = msg || "";
+  sendForReviewStatus.style.color = ok ? "green" : "crimson";
+}
+
+//const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
+const API_BASE = "http://localhost:3000";
+
+// --- negotiate mode params ---
+const params = new URLSearchParams(window.location.search);
+const pageMode = params.get("mode"); // "negotiate" | null
+const pactId = params.get("id"); // pact id to load
+
+let replacesPactIdForSubmit = null;
 
 // State
 const address = localStorage.getItem("address");
@@ -97,10 +117,6 @@ function setPactName(addr, pactId, name) {
   localStorage.setItem(pactNameKey(addr, pactId), n);
 }
 
-function getPactName(addr, pactId) {
-  return localStorage.getItem(pactNameKey(addr, pactId)) || "";
-}
-
 function earnVerb() {
   return getRole(address) === "sponsor" ? "reward" : "earn";
 }
@@ -116,6 +132,139 @@ function renderRole() {
 
   counterpartyLabel.innerText =
     role === "sponsor" ? "Creator address" : "Sponsor address";
+}
+
+function splitDuration(seconds) {
+  const s = Math.max(0, Number(seconds || 0));
+  const days = Math.floor(s / 86400);
+  const rem1 = s % 86400;
+  const hours = Math.floor(rem1 / 3600);
+  const rem2 = rem1 % 3600;
+  const minutes = Math.floor(rem2 / 60);
+  return { days, hours, minutes };
+}
+
+function coerceMilestones(arr) {
+  if (!Array.isArray(arr) || arr.length === 0)
+    return [{ views: "", payout: "" }];
+  return arr.map((m) => ({
+    views: String(m?.views ?? ""),
+    payout: String(m?.payout ?? ""),
+  }));
+}
+
+async function loadNegotiatePactOrThrow(id) {
+  replacesPactIdForSubmit = Number(id);
+  const res = await fetch(`${API_BASE}/api/pacts/${encodeURIComponent(id)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data?.error || "Failed to load pact");
+  }
+
+  if (!data.pact) {
+    throw new Error("Failed to load pact (missing pact in response).");
+  }
+
+  const p = data.pact;
+
+  // Security: only the counterparty should be able to negotiate from pact-view’s rule.
+  // If someone manually types the URL, we still protect.
+  if (String(p.status) !== "sent_for_review") {
+    throw new Error("This pact is not negotiable (not awaiting review).");
+  }
+  if (
+    String(p.counterparty_address || "").toLowerCase() !== address.toLowerCase()
+  ) {
+    throw new Error("Not authorized to negotiate this pact.");
+  }
+
+  // 1) Role: counterparty becomes the proposer in negotiation -> opposite of original proposer_role
+  const originalProposerRole = String(p.proposer_role);
+  const newRole = originalProposerRole === "sponsor" ? "creator" : "sponsor";
+  setRole(address, newRole);
+  renderRole();
+
+  // 2) Name
+  if (pactNameInput) pactNameInput.value = String(p.name || "");
+
+  // 3) Counterparty input = other party (original proposer_address)
+  counterpartyInput.value = String(p.proposer_address || "");
+  validateCounterparty();
+
+  // --- view-only fields in negotiate mode ---
+  toggleRoleButton.disabled = true; // role can't change
+  setViewOnly(pactNameInput, true); // pact name can't change
+  setViewOnly(counterpartyInput, false);
+  counterpartyInput.readOnly = true; // keep value, but user can't edit
+
+  counterpartyStatus.innerText = ""; // optional: hide validation text
+
+  // 4) Duration
+  const { days, hours, minutes } = splitDuration(p.duration_seconds);
+  if (!Number.isFinite(Number(p.duration_seconds))) {
+    throw new Error("Loaded pact is missing duration_seconds.");
+  }
+
+  durationDays.value = days;
+  durationHours.value = hours;
+  durationMinutes.value = minutes;
+  validateDuration();
+
+  // 5) Progress pay
+  progressPayEnabled.checked = !!p.progress_enabled;
+  milestonesLocked = !!p.progress_locked;
+
+  if (progressPayEnabled.checked) {
+    progressMilestones = coerceMilestones(p.progress_milestones);
+  } else {
+    progressMilestones = [{ views: "", payout: "" }];
+    milestonesLocked = false;
+    ppStatus.innerText = "";
+  }
+
+  renderProgressMilestones();
+  renderProgressPayEnabled();
+  updateMilestoneControlsVisibility();
+  updateDeleteMilestoneVisibility();
+
+  // 6) AON pay
+  aonPayEnabled.checked = !!p.aon_enabled;
+  aonRewardsLocked = !!p.aon_locked;
+
+  if (aonPayEnabled.checked) {
+    aonRewards = coerceMilestones(p.aon_rewards);
+  } else {
+    aonRewards = [{ views: "", payout: "" }];
+    aonRewardsLocked = false;
+    aonStatus.innerText = "";
+  }
+
+  renderAonRewards();
+  renderAonPayEnabled();
+  updateAonRewardControlsVisibility();
+  updateDeleteAonRewardVisibility();
+
+  // 7) Graph/slider sync
+  renderPayoutGraph();
+  syncSliderBounds();
+  updateSliderReadout();
+
+  // UX: make it obvious this is negotiation
+  if (sendForReviewButton)
+    sendForReviewButton.innerText = "Send revised pact for review";
+}
+
+function setViewOnly(el, on) {
+  if (!el) return;
+
+  // inputs: use readOnly so value is still readable/submittable/validatable
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+    el.readOnly = !!on;
+    return;
+  }
+
+  // other controls (buttons/checkboxes) can be disabled
+  if ("disabled" in el) el.disabled = !!on;
 }
 
 function renderProgressMilestones() {
@@ -1188,146 +1337,152 @@ viewsSlider?.addEventListener("input", () => {
 });
 
 sendForReviewButton.onclick = async () => {
-  // ✅ 0) Pact name must be provided
-  const pactName = String(pactNameInput?.value || "").trim();
-  if (!pactName) {
-    alert("Pact name is required.");
-    return;
-  }
-  if (pactName.length > 60) {
-    alert("Pact name must be 60 characters or less.");
-    return;
-  }
+  setSendStatus("");
 
-  // 1) Counterparty must be valid
-  if (!validateCounterparty()) {
-    alert(counterpartyStatus.innerText || "Enter a valid address.");
-    return;
-  }
+  // lock UI
+  sendForReviewButton.disabled = true;
+  sendForReviewButton.style.opacity = "0.7";
+  sendForReviewButton.style.cursor = "not-allowed";
 
-  // 2) Duration must be valid
-  if (!validateDuration()) {
-    alert(durationStatus.innerText || "Enter a valid duration.");
-    return;
-  }
-
-  // 3) Progress Pay must be disabled OR saved (and valid if enabled)
-  if (progressPayEnabled.checked) {
-    if (!milestonesLocked) {
-      alert(
-        "Progress Pay is enabled — please Save it (lock it) or disable it."
-      );
-      return;
-    }
-    const result = validateMilestonesAndExplain();
-    if (!result.ok) {
-      alert(result.msg);
-      return;
-    }
-  }
-
-  // 4) AON Pay must be disabled OR saved (and valid if enabled)
-  if (aonPayEnabled.checked) {
-    if (!aonRewardsLocked) {
-      alert(
-        "All-or-Nothing Pay is enabled — please Save it (lock it) or disable it."
-      );
-      return;
-    }
-    const result = validateAonRewardsAndExplain();
-    if (!result.ok) {
-      alert(result.msg);
-      return;
-    }
-  }
-
-  // 5) Must exist at least one payment
-  const hasProgressPayment =
-    progressPayEnabled.checked &&
-    progressMilestones.some((m) => {
-      const v = Number(String(m.views ?? "").trim());
-      const p = Number(String(m.payout ?? "").trim());
-      return Number.isInteger(v) && v > 0 && Number.isFinite(p) && p > 0;
-    });
-
-  const hasAonPayment =
-    aonPayEnabled.checked &&
-    aonRewards.some((r) => {
-      const v = Number(String(r.views ?? "").trim());
-      const p = Number(String(r.payout ?? "").trim());
-      return Number.isInteger(v) && v > 0 && Number.isFinite(p) && p > 0;
-    });
-
-  if (!hasProgressPayment && !hasAonPayment) {
-    alert(
-      "You must include at least one payment (a milestone and/or a reward)."
-    );
-    return;
-  }
-
-  // REAL Ethereum verification (signature)
-  const ok = await verifyEthOwnershipOrAlert();
-  if (!ok) return;
-
-  // Build payload
-  const role = getRole(address);
-  const counterparty = counterpartyInput.value.trim();
-  const durationSeconds =
-    Number(durationDays.value) * 86400 +
-    Number(durationHours.value) * 3600 +
-    Number(durationMinutes.value) * 60;
-
-  const message = localStorage.getItem(
-    `pactVerifyMsg:${address.toLowerCase()}`
-  );
-  const signature = localStorage.getItem(
-    `pactVerifySig:${address.toLowerCase()}`
-  );
-
-  const payload = {
-    name: pactName,
-    proposerAddress: address,
-    proposerRole: role,
-    counterpartyAddress: counterparty,
-    durationSeconds,
-
-    progressEnabled: progressPayEnabled.checked,
-    progressLocked: milestonesLocked,
-    progressMilestones: progressPayEnabled.checked ? progressMilestones : [],
-
-    aonEnabled: aonPayEnabled.checked,
-    aonLocked: aonRewardsLocked,
-    aonRewards: aonPayEnabled.checked ? aonRewards : [],
-
-    message,
-    signature,
-  };
-
-  let resp;
   try {
-    resp = await fetch(`${API_BASE}/api/pacts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    alert("Backend not reachable.");
+    // 0) Pact name required
+    const pactName = String(pactNameInput?.value || "").trim();
+    if (!pactName) return setSendStatus("Pact name is required.");
+    if (pactName.length > 60)
+      return setSendStatus("Pact name must be 60 characters or less.");
+
+    // 1) Counterparty valid
+    if (!validateCounterparty())
+      return setSendStatus(
+        counterpartyStatus.innerText || "Enter a valid address."
+      );
+
+    // 2) Duration valid
+    if (!validateDuration())
+      return setSendStatus(
+        durationStatus.innerText || "Enter a valid duration."
+      );
+
+    // 3) Progress pay: disabled OR saved
+    if (progressPayEnabled.checked) {
+      if (!milestonesLocked)
+        return setSendStatus(
+          "Progress Pay is enabled — please Save it (lock it) or disable it."
+        );
+      const result = validateMilestonesAndExplain();
+      if (!result.ok) return setSendStatus(result.msg);
+    }
+
+    // 4) AON pay: disabled OR saved
+    if (aonPayEnabled.checked) {
+      if (!aonRewardsLocked)
+        return setSendStatus(
+          "All-or-Nothing Pay is enabled — please Save it (lock it) or disable it."
+        );
+      const result = validateAonRewardsAndExplain();
+      if (!result.ok) return setSendStatus(result.msg);
+    }
+
+    // 5) Must have at least one payment
+    const hasProgressPayment =
+      progressPayEnabled.checked &&
+      progressMilestones.some((m) => {
+        const v = Number(String(m.views ?? "").trim());
+        const p = Number(String(m.payout ?? "").trim());
+        return Number.isInteger(v) && v > 0 && Number.isFinite(p) && p > 0;
+      });
+
+    const hasAonPayment =
+      aonPayEnabled.checked &&
+      aonRewards.some((r) => {
+        const v = Number(String(r.views ?? "").trim());
+        const p = Number(String(r.payout ?? "").trim());
+        return Number.isInteger(v) && v > 0 && Number.isFinite(p) && p > 0;
+      });
+
+    if (!hasProgressPayment && !hasAonPayment)
+      return setSendStatus(
+        "You must include at least one payment (a milestone and/or a reward)."
+      );
+
+    // Ethereum verification
+    setSendStatus("Waiting for MetaMask signature...");
+    const ok = await verifyEthOwnershipOrAlert();
+    if (!ok) return setSendStatus("Verification failed.");
+
+    // Build payload
+    const role = getRole(address);
+    const counterparty = counterpartyInput.value.trim();
+    const durationSeconds =
+      Number(durationDays.value) * 86400 +
+      Number(durationHours.value) * 3600 +
+      Number(durationMinutes.value) * 60;
+
+    const message = localStorage.getItem(
+      `pactVerifyMsg:${address.toLowerCase()}`
+    );
+    const signature = localStorage.getItem(
+      `pactVerifySig:${address.toLowerCase()}`
+    );
+
+    const payload = {
+      name: pactName,
+      proposerAddress: address,
+      proposerRole: role,
+      counterpartyAddress: counterparty,
+      durationSeconds,
+
+      progressEnabled: progressPayEnabled.checked,
+      progressLocked: milestonesLocked,
+      progressMilestones: progressPayEnabled.checked ? progressMilestones : [],
+
+      aonEnabled: aonPayEnabled.checked,
+      aonLocked: aonRewardsLocked,
+      aonRewards: aonPayEnabled.checked ? aonRewards : [],
+
+      message,
+      signature,
+    };
+
+    // ✅ keep replace behavior in negotiate mode
+    if (pageMode === "negotiate" && replacesPactIdForSubmit != null) {
+      payload.replacesPactId = replacesPactIdForSubmit;
+    }
+
+    setSendStatus("Saving pact...");
+
+    let resp;
+    try {
+      resp = await fetch(`${API_BASE}/api/pacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      return setSendStatus("Backend not reachable.");
+    }
+
+    const data = await resp.json().catch(() => ({}));
+
+    if (!resp.ok || !data.ok) {
+      return setSendStatus(
+        data?.error || `Failed to save pact (HTTP ${resp.status}).`
+      );
+    }
+
+    if (data?.pactId) setPactName(address, data.pactId, pactName);
+
+    setSendStatus("✓ Successfully saved. Redirecting...", true);
+
+    // ✅ redirect immediately (better than setTimeout)
+    window.location.replace("./pacts-dashboard.html");
     return;
+  } finally {
+    // unlock UI (won’t matter if redirect happens)
+    sendForReviewButton.disabled = false;
+    sendForReviewButton.style.opacity = "1";
+    sendForReviewButton.style.cursor = "pointer";
   }
-
-  const data = await resp.json();
-  if (!resp.ok || !data.ok) {
-    alert(data?.error || "Failed to save pact.");
-    return;
-  }
-
-  // ✅ Save the name locally under (address, pactId)
-  if (data?.pactId) {
-    setPactName(address, data.pactId, pactName);
-  }
-
-  alert("Successfully saved");
-  window.location.href = "./pacts-dashboard.html";
 };
 
 // Init
@@ -1342,3 +1497,19 @@ renderAonPayEnabled();
 renderPayoutGraph();
 syncSliderBounds();
 updateSliderReadout();
+
+// If arriving from "Negotiate Pact"
+(async () => {
+  if (pageMode === "negotiate") {
+    try {
+      const n = Number(pactId);
+      if (!Number.isInteger(n) || n <= 0) {
+        throw new Error(`Invalid pact id in URL: ${pactId}`);
+      }
+      await loadNegotiatePactOrThrow(n);
+    } catch (e) {
+      alert(e?.message || "Failed to load pact for negotiation.");
+      window.location.href = "./pacts-dashboard.html";
+    }
+  }
+})();
