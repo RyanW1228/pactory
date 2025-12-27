@@ -1,10 +1,8 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
 import { MNEE_ADDRESS, RPC_URL } from "./constants.js";
-import PactEscrowABI from "./abis/PactEscrow.json";
-import ERC20ABI from "./abis/ERC20.json";
+import { PactEscrowABI } from "./pactEscrowAbi.js";
 
-const ESCROW_ADDRESS = "0x..."; // deployed testnet address
-const MNEE_ADDRESS = "0x...";   // testnet MNEE or mock
+const ESCROW_ADDRESS = "0xCB1ab619DC66DB20186bABABA7bEa2b2D3079Ecc";  // deployed testnet address
 
 let provider, signer, escrow, mnee;
 
@@ -93,7 +91,7 @@ async function setupContracts(params) {
     MNEE_ADDRESS, ERC20ABI, signer
   );
 
-  
+
   
 }
 

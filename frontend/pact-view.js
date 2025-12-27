@@ -214,7 +214,79 @@ if (canInputVideoLink) {
   };
 
   contentEl.appendChild(videoBtn);
+  
+
+// --- Fund Pact button (ONLY sponsor, ONLY created) ---
+const canFund =
+  normAddr(address) === normAddr(p.sponsor_address) &&
+  String(p.status) === "created";
+
+if (canFund) {
+  const fundBtn = document.createElement("button");
+  fundBtn.type = "button";
+  fundBtn.innerText = "Fund Pact";
+
+  fundBtn.style.marginTop = "10px";
+  fundBtn.style.marginLeft = "10px";
+  fundBtn.style.background = "#1f7a1f";
+  fundBtn.style.color = "white";
+  fundBtn.style.padding = "8px 14px";
+  fundBtn.style.borderRadius = "8px";
+  fundBtn.style.border = "none";
+  fundBtn.style.cursor = "pointer";
+
+  fundBtn.onclick = async () => {
+    const amt = prompt("Enter amount of MNEE to fund:");
+    if (!amt || isNaN(amt) || Number(amt) <= 0) return;
+
+    fundBtn.disabled = true;
+    fundBtn.style.opacity = "0.7";
+
+    try {
+      if (!window.ethereum) throw new Error("MetaMask not found");
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      const mnee = new ethers.Contract(
+        MNEE_ADDRESS,
+        [
+          "function approve(address,uint256) returns (bool)",
+          "function decimals() view returns (uint8)"
+        ],
+        signer
+      );
+
+      const escrow = new ethers.Contract(
+        PACT_ESCROW_ADDRESS,
+        PactEscrowABI,
+        signer
+      );
+
+      const decimals = await mnee.decimals();
+      const wei = ethers.parseUnits(String(amt), decimals);
+
+      // 1) approve
+      const tx1 = await mnee.approve(PACT_ESCROW_ADDRESS, wei);
+      await tx1.wait();
+
+      // 2) fund
+      const tx2 = await escrow.fund(p.id, wei);
+      await tx2.wait();
+
+      alert("Pact funded successfully");
+      localStorage.setItem("pactsNeedsRefresh", "1");
+      window.location.replace("./pacts-dashboard.html");
+    } catch (e) {
+      alert(e?.message || "Funding failed");
+      fundBtn.disabled = false;
+      fundBtn.style.opacity = "1";
+    }
+  };
+
+  contentEl.appendChild(fundBtn);
 }
+
 
 // --- Negotiate button (only counterparty, only awaiting review) ---
 const canNegotiate =
@@ -368,4 +440,4 @@ if (actionLabel) {
   };
 
   contentEl.appendChild(btn);
-}
+}}
