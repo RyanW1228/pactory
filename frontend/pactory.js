@@ -21,6 +21,9 @@ const durationHours = document.getElementById("durationHours");
 const durationMinutes = document.getElementById("durationMinutes");
 const durationStatus = document.getElementById("durationStatus");
 
+// ✅ NEW: Pact name input (required)
+const pactNameInput = document.getElementById("pactName");
+
 const MAX_MILESTONES = 10;
 const progressMilestonesEl = document.getElementById("progressMilestones");
 const addMilestoneButton = document.getElementById("addMilestoneButton");
@@ -64,9 +67,7 @@ if (!localStorage.getItem(viewModeKey(address))) {
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-let progressMilestones = [
-  { views: "", payout: "" }, // start with one
-];
+let progressMilestones = [{ views: "", payout: "" }]; // start with one
 let milestonesLocked = false;
 
 let aonRewards = [{ views: "", payout: "" }]; // start with one
@@ -85,7 +86,20 @@ function setRole(addr, role) {
   localStorage.setItem(viewModeKey(addr), role);
 }
 
-// UI
+// ✅ Pact name storage (local only; per-user)
+function pactNameKey(addr, pactId) {
+  return `pactName:${String(addr || "").toLowerCase()}:${String(pactId)}`;
+}
+
+function setPactName(addr, pactId, name) {
+  const n = String(name || "").trim();
+  if (!n) return;
+  localStorage.setItem(pactNameKey(addr, pactId), n);
+}
+
+function getPactName(addr, pactId) {
+  return localStorage.getItem(pactNameKey(addr, pactId)) || "";
+}
 
 function earnVerb() {
   return getRole(address) === "sponsor" ? "reward" : "earn";
@@ -150,15 +164,15 @@ function renderProgressMilestones() {
           </div>
 
           <div style="min-width:260px;">
-  ${
-    i === 0
-      ? `<div style="font-size:12px; opacity:0.7;">Implied rate</div>`
-      : `<div style="height:14px;"></div>`
-  }
-  <div id="rate-${i}" style="font-weight:600;">
-    ${rateText || "-"}
-  </div>
-</div>
+            ${
+              i === 0
+                ? `<div style="font-size:12px; opacity:0.7;">Implied rate</div>`
+                : `<div style="height:14px;"></div>`
+            }
+            <div id="rate-${i}" style="font-weight:600;">
+              ${rateText || "-"}
+            </div>
+          </div>
         </div>
       `;
     })
@@ -172,16 +186,10 @@ function formatRate(rate, sig = 2, minDecimals = 2) {
 
   const abs = Math.abs(rate);
 
-  // If it's >= 1, dollars+cents already gives >=2 sig digits in normal cases
   if (abs >= 1) return rate.toFixed(minDecimals);
 
-  // For 0 < abs < 1:
-  // Find the exponent of the first non-zero digit after decimal.
-  // Example: 0.022 -> log10(abs) ~ -1.66, floor = -2
-  // Needed decimals for sig=2: (-floor(log10(abs))) + (sig - 1)
-  const exp = Math.floor(Math.log10(abs)); // negative
+  const exp = Math.floor(Math.log10(abs));
   const neededDecimalsForSig = -exp + (sig - 1);
-
   const decimals = Math.max(minDecimals, neededDecimalsForSig);
   return rate.toFixed(decimals);
 }
@@ -192,7 +200,6 @@ function renderProgressPayEnabled() {
   progressPayBody.style.display = enabled ? "block" : "none";
   noProgressPayText.style.display = enabled ? "none" : "block";
 
-  // ✅ hide/show Save + Edit when disabled
   saveMilestonesButton.style.display =
     enabled && !milestonesLocked ? "inline-block" : "none";
   editMilestonesButton.style.display =
@@ -306,10 +313,10 @@ function renderAonRewards() {
           </div>
 
           <div style="min-width:320px;">
-          <div style="font-size:12px; opacity:0.7;">Reward</div>
-          <div id="aon-reward-${i}" style="font-weight:600;">
-            ${rewardText || "-"}
-          </div>
+            <div style="font-size:12px; opacity:0.7;">Reward</div>
+            <div id="aon-reward-${i}" style="font-weight:600;">
+              ${rewardText || "-"}
+            </div>
           </div>
         </div>
       `;
@@ -324,7 +331,6 @@ function renderAonPayEnabled() {
   aonPayBody.style.display = enabled ? "block" : "none";
   noAonPayText.style.display = enabled ? "none" : "block";
 
-  // ✅ hide/show Save + Edit when disabled
   saveAonRewardButton.style.display =
     enabled && !aonRewardsLocked ? "inline-block" : "none";
   editAonRewardsButton.style.display =
@@ -377,10 +383,8 @@ function aonRewardText(i) {
 }
 
 function progressPayoutAtViews(x) {
-  // x: integer views
   if (!progressPayEnabled.checked) return 0;
 
-  // valid milestones only, sorted
   const ms = progressMilestones
     .map((m) => ({ v: Number(m.views), p: Number(m.payout) }))
     .filter(
@@ -390,14 +394,11 @@ function progressPayoutAtViews(x) {
 
   if (ms.length === 0) return 0;
 
-  // clamp
   if (x <= 0) return 0;
   if (x >= ms[ms.length - 1].v) return ms[ms.length - 1].p;
 
-  // first segment
   if (x <= ms[0].v) return (x / ms[0].v) * ms[0].p;
 
-  // interpolate between milestones
   for (let i = 1; i < ms.length; i++) {
     const a = ms[i - 1],
       b = ms[i];
@@ -420,7 +421,7 @@ function aonBonusAtViews(x) {
 
   let sum = 0;
   for (const r of rewards) {
-    if (x >= r.v) sum += r.p; // one-time bonus earned once threshold reached
+    if (x >= r.v) sum += r.p;
   }
   return sum;
 }
@@ -429,7 +430,6 @@ function totalPayoutAtViews(x) {
   return progressPayoutAtViews(x) + aonBonusAtViews(x);
 }
 
-// Collect the x "vertices" we care about: 0, all milestone/reward view thresholds, plus ∞ at the end.
 function collectKeyViewsWithInfinity() {
   const set = new Set();
   set.add(0);
@@ -452,7 +452,6 @@ function collectKeyViewsWithInfinity() {
   return [...numeric, X_INF];
 }
 
-// Map each key (including ∞) to an evenly spaced x-position.
 function makeOrdinalScaleX(keys, padL, innerW) {
   const n = keys.length;
   const pos = new Map();
@@ -461,13 +460,11 @@ function makeOrdinalScaleX(keys, padL, innerW) {
   return (k) => pos.get(k);
 }
 
-// Display label for x-axis keys
 function formatXKey(k) {
   return k === X_INF ? "∞" : String(k);
 }
 
 function aonBonusBeforeViews(k) {
-  // bonus strictly before reaching k views (i.e., rewards with v < k)
   if (!aonPayEnabled.checked) return 0;
   if (!Number.isFinite(k)) return 0;
 
@@ -527,7 +524,6 @@ function renderPayoutGraph() {
   payoutGraph.setAttribute("viewBox", `0 0 ${w} ${h}`);
   payoutGraph.innerHTML = "";
 
-  // Axes
   payoutGraph.innerHTML += `
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${
     padT + innerH
@@ -539,10 +535,8 @@ function renderPayoutGraph() {
     <text x="10" y="${padT + 12}" font-size="11" fill="#666">payout</text>
   `;
 
-  // Ordinal x keys (0 ... ∞)
   const keys = collectKeyViewsWithInfinity();
 
-  // If there are no numeric thresholds yet, show hint and just label 0/∞
   const hasAnyThreshold = keys.some((k) => k !== 0 && k !== X_INF);
   if (!hasAnyThreshold) {
     payoutGraph.innerHTML += `
@@ -575,7 +569,6 @@ function renderPayoutGraph() {
 
   const sx = makeOrdinalScaleX(keys, padL, innerW);
 
-  // Compute payout "just before" and "at" each threshold so AON can jump vertically
   const pts = keys.map((k) => {
     if (k === X_INF) {
       const y = totalPayoutAtViews(Number.MAX_SAFE_INTEGER);
@@ -583,35 +576,29 @@ function renderPayoutGraph() {
     }
 
     const progress = progressPayoutAtViews(k);
-    const yBefore = progress + aonBonusBeforeViews(k); // rewards with v < k
-    const yAfter = progress + aonBonusAtViews(k); // rewards with v <= k
+    const yBefore = progress + aonBonusBeforeViews(k);
+    const yAfter = progress + aonBonusAtViews(k);
     return { k, yBefore, yAfter };
   });
 
   const maxY = Math.max(1, ...pts.map((p) => Math.max(p.yBefore, p.yAfter)));
   const sy = (y) => padT + innerH - (y / maxY) * innerH;
 
-  // Y-axis ticks + labels
   const yTicks = makeNiceTicks(maxY, 6);
 
   for (const yVal of yTicks) {
     const y = sy(yVal);
 
     payoutGraph.innerHTML += `
-    <line x1="${padL - 4}" y1="${y}" x2="${padL}" y2="${y}" stroke="#999"/>
-    <text
-      x="${padL - 8}"
-      y="${y + 3}"
-      font-size="10"
-      fill="#666"
-      text-anchor="end"
-    >
-      ${formatMoneyTick(yVal)}
-    </text>
-  `;
+      <line x1="${padL - 4}" y1="${y}" x2="${padL}" y2="${y}" stroke="#999"/>
+      <text x="${padL - 8}" y="${
+      y + 3
+    }" font-size="10" fill="#666" text-anchor="end">
+        ${formatMoneyTick(yVal)}
+      </text>
+    `;
   }
 
-  // X labels (keep it readable)
   const maxLabels = 8;
   const showIdx = new Set();
   showIdx.add(0);
@@ -638,36 +625,26 @@ function renderPayoutGraph() {
     `;
   });
 
-  // Hybrid path:
-  // - slope into each keypoint to yBefore (progress ramps)
-  // - if AON triggers at that keypoint, jump vertically to yAfter
   let d = `M ${sx(pts[0].k)} ${sy(pts[0].yAfter)} `;
 
   for (let i = 1; i < pts.length; i++) {
     const cur = pts[i];
     const xCur = sx(cur.k);
 
-    // slope into the threshold (AON still "not yet" at this exact instant)
     d += `L ${xCur} ${sy(cur.yBefore)} `;
 
-    // vertical jump if AON adds payout at exactly this threshold
     if (Math.abs(cur.yAfter - cur.yBefore) > 1e-9) {
       d += `L ${xCur} ${sy(cur.yAfter)} `;
     }
   }
 
-  payoutGraph.innerHTML += `
-    <path d="${d}" fill="none" stroke="#333" stroke-width="2"/>
-  `;
+  payoutGraph.innerHTML += `<path d="${d}" fill="none" stroke="#333" stroke-width="2"/>`;
 
-  // === Slider marker (vertical line + dot) ===
   if (viewsSlider) {
     const v = Number(viewsSlider.value || 0);
 
-    // For marker X: interpolate INSIDE ordinal segments (segments are equal-width,
-    // but within a segment we slide smoothly by true numeric fraction).
-    const numericKeys = keys.filter((k) => k !== X_INF); // includes 0
-    let xMarker = sx(numericKeys[numericKeys.length - 1]); // default clamp right
+    const numericKeys = keys.filter((k) => k !== X_INF);
+    let xMarker = sx(numericKeys[numericKeys.length - 1]);
 
     if (v <= numericKeys[0]) {
       xMarker = sx(numericKeys[0]);
@@ -678,7 +655,7 @@ function renderPayoutGraph() {
         if (v <= b) {
           const xa = sx(a);
           const xb = sx(b);
-          const t = (v - a) / (b - a); // 0..1
+          const t = (v - a) / (b - a);
           xMarker = xa + t * (xb - xa);
           break;
         }
@@ -721,7 +698,6 @@ function maxThresholdViews() {
 }
 
 function formatMoney(v) {
-  // simple display; tweak later if you want cents always
   return `$${v.toFixed(2)}`;
 }
 
@@ -742,7 +718,6 @@ function syncSliderBounds() {
   viewsSlider.min = "0";
   viewsSlider.max = String(maxV);
 
-  // clamp current value
   const cur = Number(viewsSlider.value || 0);
   if (cur > maxV) viewsSlider.value = String(maxV);
 }
@@ -755,6 +730,13 @@ function updateSliderReadout() {
 
   const earned = totalPayoutAtViews(v);
   sliderPayoutLabel.innerText = formatMoney(earned);
+}
+
+// ✅ NEW: validate pact name (required)
+function validatePactName() {
+  if (!pactNameInput) return true; // if missing in DOM, don't hard-crash
+  const name = String(pactNameInput.value || "").trim();
+  return name.length > 0;
 }
 
 // Validation
@@ -820,7 +802,6 @@ function validateDuration() {
 }
 
 function validateMilestonesAndExplain() {
-  // 1) Empty fields
   for (let i = 0; i < progressMilestones.length; i++) {
     const m = progressMilestones[i];
     const viewsStr = String(m.views ?? "").trim();
@@ -836,7 +817,6 @@ function validateMilestonesAndExplain() {
     }
   }
 
-  // 2) Proper numeric fields
   for (let i = 0; i < progressMilestones.length; i++) {
     const m = progressMilestones[i];
     const views = Number(String(m.views).trim());
@@ -861,7 +841,6 @@ function validateMilestonesAndExplain() {
     }
   }
 
-  // 3) Must strictly increase (views and total payout)
   for (let i = 1; i < progressMilestones.length; i++) {
     const prevViews = Number(progressMilestones[i - 1].views);
     const prevPayout = Number(progressMilestones[i - 1].payout);
@@ -892,7 +871,6 @@ function validateMilestonesAndExplain() {
 }
 
 function validateAonRewardsAndExplain() {
-  // 1) Empty fields
   for (let i = 0; i < aonRewards.length; i++) {
     const m = aonRewards[i];
     const viewsStr = String(m.views ?? "").trim();
@@ -908,7 +886,6 @@ function validateAonRewardsAndExplain() {
     }
   }
 
-  // 2) Proper numeric fields
   for (let i = 0; i < aonRewards.length; i++) {
     const m = aonRewards[i];
     const views = Number(String(m.views).trim());
@@ -933,7 +910,6 @@ function validateAonRewardsAndExplain() {
     }
   }
 
-  // 3) Views must strictly increase (payout does NOT need to)
   for (let i = 1; i < aonRewards.length; i++) {
     const prevViews = Number(aonRewards[i - 1].views);
     const curViews = Number(aonRewards[i].views);
@@ -959,7 +935,6 @@ async function verifyEthOwnershipOrAlert() {
 
   const browserProvider = new ethers.BrowserProvider(window.ethereum);
 
-  // Ask MetaMask for the currently selected account
   const accounts = await window.ethereum.request({
     method: "eth_requestAccounts",
   });
@@ -970,7 +945,6 @@ async function verifyEthOwnershipOrAlert() {
     return false;
   }
 
-  // Make sure the selected wallet matches the one you 'logged in' with
   if (selected !== address.toLowerCase()) {
     alert(
       `MetaMask account does not match your login address.\n\nLogin: ${address}\nMetaMask: ${accounts[0]}`
@@ -980,7 +954,6 @@ async function verifyEthOwnershipOrAlert() {
 
   const signer = await browserProvider.getSigner();
 
-  // (Optional but nice) bind signature to this page + role + counterparty
   const role = getRole(address);
   const counterparty = counterpartyInput.value.trim();
   const durationSec =
@@ -1008,14 +981,12 @@ async function verifyEthOwnershipOrAlert() {
     return false;
   }
 
-  // Verify signature recovers the same address
   const recovered = ethers.verifyMessage(message, signature).toLowerCase();
   if (recovered !== address.toLowerCase()) {
     alert("Signature verification failed (recovered address mismatch).");
     return false;
   }
 
-  // Optional: persist proof for backend later
   localStorage.setItem(`pactVerifySig:${address.toLowerCase()}`, signature);
   localStorage.setItem(`pactVerifyMsg:${address.toLowerCase()}`, message);
 
@@ -1029,7 +1000,6 @@ toggleRoleButton.onclick = () => {
   setRole(address, next);
   renderRole();
 
-  // reset fields
   counterpartyInput.value = "";
   counterpartyStatus.innerText = "";
 
@@ -1044,6 +1014,7 @@ toggleRoleButton.onclick = () => {
 
   progressMilestones = [{ views: "", payout: "" }];
   ppStatus.innerText = "";
+  milestonesLocked = false;
   renderProgressMilestones();
   updateDeleteMilestoneVisibility();
 
@@ -1079,7 +1050,6 @@ progressMilestonesEl.addEventListener("input", (e) => {
   progressMilestones[idx][field] = e.target.value;
   renderPayoutGraph();
 
-  // update only the rate text (no full re-render)
   const rateEl = document.getElementById(`rate-${idx}`);
   if (rateEl) rateEl.innerText = impliedRateText(idx) || "-";
 });
@@ -1113,7 +1083,7 @@ addMilestoneButton.onclick = () => {
 deleteMilestoneButton.onclick = () => {
   if (progressMilestones.length <= 1) return;
 
-  progressMilestones.pop(); // delete latest
+  progressMilestones.pop();
   ppStatus.innerText = "";
   renderProgressMilestones();
   updateDeleteMilestoneVisibility();
@@ -1121,7 +1091,6 @@ deleteMilestoneButton.onclick = () => {
 };
 
 saveMilestonesButton.onclick = () => {
-  // optional: ensure milestones are valid before locking
   const result = validateMilestonesAndExplain();
   if (!result.ok) {
     ppStatus.innerText = result.msg;
@@ -1137,7 +1106,7 @@ saveMilestonesButton.onclick = () => {
 
 editMilestonesButton.onclick = () => {
   milestonesLocked = false;
-  ppStatus.innerText = ""; // or "Editing enabled."
+  ppStatus.innerText = "";
   renderProgressMilestones();
   updateMilestoneControlsVisibility();
   renderPayoutGraph();
@@ -1219,6 +1188,17 @@ viewsSlider?.addEventListener("input", () => {
 });
 
 sendForReviewButton.onclick = async () => {
+  // ✅ 0) Pact name must be provided
+  const pactName = String(pactNameInput?.value || "").trim();
+  if (!pactName) {
+    alert("Pact name is required.");
+    return;
+  }
+  if (pactName.length > 60) {
+    alert("Pact name must be 60 characters or less.");
+    return;
+  }
+
   // 1) Counterparty must be valid
   if (!validateCounterparty()) {
     alert(counterpartyStatus.innerText || "Enter a valid address.");
@@ -1231,7 +1211,7 @@ sendForReviewButton.onclick = async () => {
     return;
   }
 
-  // 4) Progress Pay must be disabled OR saved (and valid if enabled)
+  // 3) Progress Pay must be disabled OR saved (and valid if enabled)
   if (progressPayEnabled.checked) {
     if (!milestonesLocked) {
       alert(
@@ -1261,7 +1241,7 @@ sendForReviewButton.onclick = async () => {
     }
   }
 
-  // 3) Must exist at least one payment
+  // 5) Must exist at least one payment
   const hasProgressPayment =
     progressPayEnabled.checked &&
     progressMilestones.some((m) => {
@@ -1285,11 +1265,11 @@ sendForReviewButton.onclick = async () => {
     return;
   }
 
-  // ✅ REAL Ethereum verification (signature)
+  // REAL Ethereum verification (signature)
   const ok = await verifyEthOwnershipOrAlert();
   if (!ok) return;
 
-  // Build payload (send only what you need)
+  // Build payload
   const role = getRole(address);
   const counterparty = counterpartyInput.value.trim();
   const durationSeconds =
@@ -1297,7 +1277,6 @@ sendForReviewButton.onclick = async () => {
     Number(durationHours.value) * 3600 +
     Number(durationMinutes.value) * 60;
 
-  // pull the signature + message you stored in verifyEthOwnershipOrAlert()
   const message = localStorage.getItem(
     `pactVerifyMsg:${address.toLowerCase()}`
   );
@@ -1306,6 +1285,7 @@ sendForReviewButton.onclick = async () => {
   );
 
   const payload = {
+    name: pactName,
     proposerAddress: address,
     proposerRole: role,
     counterpartyAddress: counterparty,
@@ -1339,6 +1319,11 @@ sendForReviewButton.onclick = async () => {
   if (!resp.ok || !data.ok) {
     alert(data?.error || "Failed to save pact.");
     return;
+  }
+
+  // ✅ Save the name locally under (address, pactId)
+  if (data?.pactId) {
+    setPactName(address, data.pactId, pactName);
   }
 
   alert("Successfully saved");

@@ -65,9 +65,24 @@ function setViewMode(mode) {
 
   renderSections(mode);
 
-  // load dynamic sections
   loadSentForReview(mode);
   loadAwaitingYourReview(mode);
+}
+
+function formatEastern(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  }).format(d);
 }
 
 // Render static section containers
@@ -91,28 +106,29 @@ function renderSections(mode) {
 
 async function refreshDashboard() {
   const mode = getViewMode();
-  // setViewMode calls renderSections + loads
   setViewMode(mode);
 }
 
-// Shared: attach one click handler per list container
 function attachManageHandler(listEl) {
   if (!listEl) return;
 
-  // Avoid stacking multiple handlers if loader runs repeatedly
   listEl.onclick = (e) => {
     const btn = e.target.closest("[data-open-pact]");
     if (!btn) return;
 
     const pactId = btn.getAttribute("data-open-pact");
     const m = btn.getAttribute("data-open-mode"); // "sent" | "awaiting"
-
     if (!pactId || !m) return;
 
     window.location.href = `./pact-view.html?id=${encodeURIComponent(
       pactId
     )}&mode=${encodeURIComponent(m)}`;
   };
+}
+
+function displayPactTitle(p) {
+  const n = String(p?.name || "").trim();
+  return n ? n : `Pact #${p.id}`;
 }
 
 // Sent for Review (proposer)
@@ -148,12 +164,17 @@ async function loadSentForReview(mode) {
       .map((p) => {
         const other =
           mode === "sponsor" ? p.creator_address : p.sponsor_address;
+
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
-            <div style="font-weight:600;">Pact #${p.id}</div>
+            <div style="font-weight:600;">${displayPactTitle(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
-            <div style="font-size:12px; opacity:0.8;">Created: ${p.created_at}</div>
-            <button type="button" data-open-pact="${p.id}" data-open-mode="sent" style="margin-top:8px;">
+            <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
+              p.created_at
+            )}</div>
+            <button type="button" data-open-pact="${
+              p.id
+            }" data-open-mode="sent" style="margin-top:8px;">
               Manage
             </button>
           </div>
@@ -200,12 +221,17 @@ async function loadAwaitingYourReview(mode) {
       .map((p) => {
         const other =
           mode === "sponsor" ? p.creator_address : p.sponsor_address;
+
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
-            <div style="font-weight:600;">Pact #${p.id}</div>
+            <div style="font-weight:600;">${displayPactTitle(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
-            <div style="font-size:12px; opacity:0.8;">Created: ${p.created_at}</div>
-            <button type="button" data-open-pact="${p.id}" data-open-mode="awaiting" style="margin-top:8px;">
+            <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
+              p.created_at
+            )}</div>
+            <button type="button" data-open-pact="${
+              p.id
+            }" data-open-mode="awaiting" style="margin-top:8px;">
               Manage
             </button>
           </div>
@@ -267,16 +293,6 @@ async function init() {
       await refreshDashboard();
     }
 
-    // Refresh once if coming back from delete/reject
-    if (localStorage.getItem("pactsNeedsRefresh") === "1") {
-      localStorage.removeItem("pactsNeedsRefresh");
-      const mode = getViewMode();
-      renderSections(mode);
-      await loadSentForReview(mode);
-      await loadAwaitingYourReview(mode);
-    }
-
-    // When returning via back button or bfcache, re-fetch lists so deletions show immediately
     window.addEventListener("pageshow", async () => {
       try {
         await refreshDashboard();
