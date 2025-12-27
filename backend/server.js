@@ -1,48 +1,70 @@
+// server.js
 import express from "express";
 import cors from "cors";
-import Database from "better-sqlite3";
+import { Database } from "@sqlitecloud/drivers";
 import { ethers } from "ethers";
 
+// ------------------
+// App setup
+// ------------------
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-const db = new Database("./pacts.db");
-
-// --- schema ---
-db.exec(`
-CREATE TABLE IF NOT EXISTS pacts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-
-  creator_address TEXT NOT NULL,
-  sponsor_address TEXT NOT NULL,
-
-  proposer_role TEXT NOT NULL CHECK (proposer_role IN ('sponsor','creator')),
-  proposer_address TEXT NOT NULL,
-
-  counterparty_address TEXT NOT NULL,
-
-  duration_seconds INTEGER NOT NULL,
-
-  progress_enabled INTEGER NOT NULL,
-  progress_locked INTEGER NOT NULL,
-  progress_json TEXT NOT NULL,
-
-  aon_enabled INTEGER NOT NULL,
-  aon_locked INTEGER NOT NULL,
-  aon_json TEXT NOT NULL,
-
-  status TEXT NOT NULL
+// ------------------
+// Database (SQLiteCloud)
+// ------------------
+const db = new Database(
+  "sqlitecloud://cteuqdjnvk.g6.sqlite.cloud:8860/pacts.db?apikey=XPV0ij4QGSNPQQMQroc9ZDd97sixQLYSWANqKGqXMx8"
 );
 
-CREATE INDEX IF NOT EXISTS idx_pacts_status ON pacts(status);
-CREATE INDEX IF NOT EXISTS idx_pacts_sponsor ON pacts(sponsor_address);
-CREATE INDEX IF NOT EXISTS idx_pacts_creator ON pacts(creator_address);
-`);
+// ------------------
+// Init schema
+// ------------------
+async function initDB() {
+  await db.sql`
+    CREATE TABLE IF NOT EXISTS pacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
 
-// --- helpers ---
+      creator_address TEXT NOT NULL,
+      sponsor_address TEXT NOT NULL,
+
+      proposer_role TEXT NOT NULL CHECK (proposer_role IN ('sponsor','creator')),
+      proposer_address TEXT NOT NULL,
+      counterparty_address TEXT NOT NULL,
+
+      duration_seconds INTEGER NOT NULL,
+
+      progress_enabled INTEGER NOT NULL,
+      progress_locked INTEGER NOT NULL,
+      progress_json TEXT NOT NULL,
+
+      aon_enabled INTEGER NOT NULL,
+      aon_locked INTEGER NOT NULL,
+      aon_json TEXT NOT NULL,
+
+      status TEXT NOT NULL
+    );
+  `;
+
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS idx_pacts_status ON pacts(status);
+  `;
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS idx_pacts_sponsor ON pacts(sponsor_address);
+  `;
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS idx_pacts_creator ON pacts(creator_address);
+  `;
+
+  console.log("✅ Database ready");
+}
+
+// ------------------
+// Helpers
+// ------------------
 function nowIso() {
   return new Date().toISOString();
 }
@@ -52,42 +74,56 @@ function normAddr(a) {
 }
 
 function requireAddress(a, label) {
-  if (!ethers.isAddress(a)) throw new Error(`Invalid ${label} address`);
+  if (!ethers.isAddress(a)) {
+    throw new Error(`Invalid ${label} address`);
+  }
   return ethers.getAddress(a); // checksum
 }
 
 function verifySignatureOrThrow({ message, signature, expectedAddress }) {
   if (!message || !signature) throw new Error("Missing signature");
+
   const recovered = ethers.verifyMessage(message, signature);
   if (normAddr(recovered) !== normAddr(expectedAddress)) {
     throw new Error("Signature does not match proposer address");
   }
 }
 
-// --- routes ---
+// ------------------
+// Health check
+// ------------------
+app.get("/health", async (req, res) => {
+  try {
+    await db.sql`SELECT 1;`;
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
-// Create pact (Sent for Review)
-app.post("/api/pacts", (req, res) => {
+// ------------------
+// Create pact
+// ------------------
+app.post("/api/pacts", async (req, res) => {
   try {
     const {
       proposerAddress,
-      proposerRole, // 'sponsor' or 'creator'
+      proposerRole,
       counterpartyAddress,
       durationSeconds,
 
       progressEnabled,
       progressLocked,
-      progressMilestones, // array
+      progressMilestones,
 
       aonEnabled,
       aonLocked,
-      aonRewards, // array
+      aonRewards,
 
       message,
       signature,
     } = req.body;
 
-    // Basic validation
     const proposer = requireAddress(proposerAddress, "proposer");
     const counterparty = requireAddress(counterpartyAddress, "counterparty");
 
@@ -100,33 +136,43 @@ app.post("/api/pacts", (req, res) => {
     }
 
     const dur = Number(durationSeconds);
-    if (!Number.isInteger(dur) || dur <= 0) throw new Error("Invalid duration");
+    if (!Number.isInteger(dur) || dur <= 0) {
+      throw new Error("Invalid duration");
+    }
 
-    // must be disabled or locked
-    if (progressEnabled && !progressLocked)
+    if (progressEnabled && !progressLocked) {
       throw new Error("Progress Pay must be saved or disabled");
-    if (aonEnabled && !aonLocked)
+    }
+    if (aonEnabled && !aonLocked) {
       throw new Error("All-or-Nothing Pay must be saved or disabled");
+    }
 
-    // must have at least one payment
     const hasProgress =
-      !!progressEnabled &&
+      progressEnabled &&
       Array.isArray(progressMilestones) &&
       progressMilestones.length > 0;
+
     const hasAon =
-      !!aonEnabled && Array.isArray(aonRewards) && aonRewards.length > 0;
-    if (!hasProgress && !hasAon)
+      aonEnabled && Array.isArray(aonRewards) && aonRewards.length > 0;
+
+    if (!hasProgress && !hasAon) {
       throw new Error("Must include at least one payment");
+    }
 
-    // Ethereum verification (signature)
-    verifySignatureOrThrow({ message, signature, expectedAddress: proposer });
+    verifySignatureOrThrow({
+      message,
+      signature,
+      expectedAddress: proposer,
+    });
 
-    // Determine sponsor/creator addresses from proposer role
-    const sponsorAddress = proposerRole === "sponsor" ? proposer : counterparty;
-    const creatorAddress = proposerRole === "creator" ? proposer : counterparty;
+    const sponsorAddress =
+      proposerRole === "sponsor" ? proposer : counterparty;
+    const creatorAddress =
+      proposerRole === "creator" ? proposer : counterparty;
 
     const t = nowIso();
-    const stmt = db.prepare(`
+
+    await db.sql`
       INSERT INTO pacts (
         created_at, updated_at,
         creator_address, sponsor_address,
@@ -136,97 +182,94 @@ app.post("/api/pacts", (req, res) => {
         progress_enabled, progress_locked, progress_json,
         aon_enabled, aon_locked, aon_json,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+      ) VALUES (
+        ${t}, ${t},
+        ${creatorAddress}, ${sponsorAddress},
+        ${proposerRole}, ${proposer},
+        ${counterparty},
+        ${dur},
+        ${progressEnabled ? 1 : 0},
+        ${progressLocked ? 1 : 0},
+        ${JSON.stringify(progressMilestones || [])},
+        ${aonEnabled ? 1 : 0},
+        ${aonLocked ? 1 : 0},
+        ${JSON.stringify(aonRewards || [])},
+        'sent_for_review'
+      );
+    `;
 
-    const info = stmt.run(
-      t,
-      t,
-      creatorAddress,
-      sponsorAddress,
-      proposerRole,
-      proposer,
-      counterparty,
-      dur,
-      progressEnabled ? 1 : 0,
-      progressLocked ? 1 : 0,
-      JSON.stringify(progressMilestones || []),
-      aonEnabled ? 1 : 0,
-      aonLocked ? 1 : 0,
-      JSON.stringify(aonRewards || []),
-      "sent_for_review"
-    );
-
-    res.json({ ok: true, pactId: info.lastInsertRowid });
+    res.json({ ok: true });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 
-// List pacts for dashboard sections (we’ll start with sent_for_review)
-app.get("/api/pacts", (req, res) => {
+// ------------------
+// List pacts
+// ------------------
+app.get("/api/pacts", async (req, res) => {
   try {
-    const { address, role, status, bucket } = req.query;
+    const { address, role, bucket } = req.query;
 
-    if (!address || !ethers.isAddress(address))
+    if (!address || !ethers.isAddress(address)) {
       throw new Error("Invalid address");
+    }
+
     const addr = normAddr(address);
 
-    let where = "";
-    const params = [];
+    let where = [];
+    let params = [];
 
-    // role filter (who the pact belongs to)
     if (role === "sponsor") {
-      where += (where ? " AND " : "") + "lower(sponsor_address)=?";
+      where.push("lower(sponsor_address) = ?");
       params.push(addr);
     } else if (role === "creator") {
-      where += (where ? " AND " : "") + "lower(creator_address)=?";
+      where.push("lower(creator_address) = ?");
       params.push(addr);
     } else {
       throw new Error("role must be sponsor or creator");
     }
 
-    // bucket logic (maps to underlying status but differs by proposer vs counterparty)
     if (bucket === "sent_for_review") {
-      where +=
-        (where ? " AND " : "") + "status=? AND lower(proposer_address)=?";
-      params.push("sent_for_review", addr);
+      where.push("status = 'sent_for_review'");
+      where.push("lower(proposer_address) = ?");
+      params.push(addr);
     } else if (bucket === "awaiting_your_review") {
-      where +=
-        (where ? " AND " : "") + "status=? AND lower(proposer_address)<>?";
-      params.push("sent_for_review", addr);
-    } else if (status) {
-      // fallback: raw status filter if you still want it
-      where += (where ? " AND " : "") + "status=?";
-      params.push(String(status));
+      where.push("status = 'sent_for_review'");
+      where.push("lower(proposer_address) <> ?");
+      params.push(addr);
     }
 
-    const rows = db
-      .prepare(
-        `SELECT id, created_at, sponsor_address, creator_address, status, proposer_address, proposer_role
-         FROM pacts
-         WHERE ${where}
-         ORDER BY id DESC
-         LIMIT 100`
-      )
-      .all(...params);
+    const sql = `
+      SELECT id, created_at, sponsor_address, creator_address,
+             status, proposer_address, proposer_role
+      FROM pacts
+      WHERE ${where.join(" AND ")}
+      ORDER BY id DESC
+      LIMIT 100
+    `;
 
+    const rows = await db.sql(sql, ...params);
     res.json({ ok: true, rows });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 
-// Read pact details (view-only page)
-app.get("/api/pacts/:id", (req, res) => {
+// ------------------
+// Get pact details
+// ------------------
+app.get("/api/pacts/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) throw new Error("Invalid id");
 
-    const row = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const rows = await db.sql`SELECT * FROM pacts WHERE id = ${id};`;
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: "Not found" });
+    }
 
-    if (!row) return res.status(404).json({ ok: false, error: "Not found" });
-
+    const row = rows[0];
     res.json({
       ok: true,
       pact: {
@@ -236,44 +279,52 @@ app.get("/api/pacts/:id", (req, res) => {
       },
     });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 
-// Delete (or reject) pact
-app.delete("/api/pacts/:id", (req, res) => {
+// ------------------
+// Delete pact
+// ------------------
+app.delete("/api/pacts/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) throw new Error("Invalid id");
-
     const { address } = req.query;
-    if (!address || !ethers.isAddress(address))
+
+    if (!Number.isInteger(id)) throw new Error("Invalid id");
+    if (!address || !ethers.isAddress(address)) {
       throw new Error("Invalid address");
+    }
 
     const addr = normAddr(address);
+    const rows = await db.sql`SELECT * FROM pacts WHERE id = ${id};`;
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
-    if (!pact) throw new Error("Pact not found");
+    if (!rows.length) throw new Error("Pact not found");
 
-    // Only proposer OR counterparty can delete/reject
+    const pact = rows[0];
     const isProposer = normAddr(pact.proposer_address) === addr;
     const isCounterparty = normAddr(pact.counterparty_address) === addr;
 
     if (!isProposer && !isCounterparty) {
-      throw new Error("Not authorized to delete this pact");
+      throw new Error("Not authorized");
     }
 
-    // Only allowed while sent_for_review
     if (pact.status !== "sent_for_review") {
       throw new Error("Pact can no longer be deleted");
     }
 
-    db.prepare(`DELETE FROM pacts WHERE id=?`).run(id);
-
+    await db.sql`DELETE FROM pacts WHERE id = ${id};`;
     res.json({ ok: true });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 
-app.listen(3000, () => console.log("API running on http://localhost:3000"));
+// ------------------
+// Start server
+// ------------------
+initDB().then(() => {
+  app.listen(3000, () => {
+    console.log("🚀 API running at http://localhost:3000");
+  });
+});

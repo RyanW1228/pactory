@@ -1,0 +1,12 @@
+# OS junk
+.DS_Store
+
+# Environment files
+.env
+
+# Node
+node_modules/
+backend/node_modules/
+
+# Build artifacts
+*.node
