@@ -2,7 +2,7 @@ import { ethers } from "./ethers-6.7.esm.min.js";
 import { RPC_URL, MNEE_ADDRESS } from "./constants.js";
 
 // Config
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
 
 // Session
 const address = localStorage.getItem("address");
