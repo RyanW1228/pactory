@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Input Video Link</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+          Arial, sans-serif;
+        max-width: 900px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      .card {
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        padding: 14px;
+        margin-top: 14px;
+      }
+      .row {
+        margin: 10px 0;
+      }
+      label {
+        font-weight: 600;
+        display: block;
+        margin-bottom: 6px;
+      }
+      input[type="url"],
+      input[type="text"] {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #ccc;
+        outline: none;
+      }
+      button {
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: #2c3e50;
+        color: white;
+      }
+      .btn-secondary {
+        background: #eee;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 13px;
+        color: crimson;
+        min-height: 16px;
+      }
+      .status.ok {
+        color: green;
+      }
+      .meta {
+        font-size: 12px;
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="backButton" class="btn-secondary">← Back</button>
+
+    <h2 id="title" style="margin-top: 14px">Input Video Link</h2>
+    <div class="meta" id="meta"></div>
+
+    <div class="card">
+      <div class="row">
+        <label for="videoLinkInput"
+          >Video link (Instagram / Reels / etc.)</label
+        >
+        <input
+          id="videoLinkInput"
+          type="url"
+          placeholder="https://..."
+          autocomplete="off"
+        />
+      </div>
+
+      <div style="display: flex; gap: 10px; align-items: center">
+        <button id="saveButton" class="btn-primary" type="button">
+          Save Video Link
+        </button>
+        <button id="cancelButton" class="btn-secondary" type="button">
+          Cancel
+        </button>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <script type="module" src="./video-link.js"></script>
+  </body>
+</html>
