@@ -25,6 +25,8 @@ const sectionsContainer = document.getElementById("sectionsContainer");
 const toggleViewButton = document.getElementById("toggleViewButton");
 const mneeBalanceSpan = document.getElementById("mneeBalance");
 
+
+
 // Sections
 const SPONSOR_SECTIONS = [
   "Active",
@@ -42,6 +44,16 @@ const CREATOR_SECTIONS = [
   "Sent for Review",
   "Archive",
 ];
+
+const pact = await escrow.pacts(pactId);
+
+console.log({
+  sponsor: pact.sponsor,
+  creator: pact.creator,
+  status: pact.status,
+  funded: pact.fundedAmount.toString()
+});
+
 
 // View mode storage
 function viewModeKey(addr) {
@@ -307,5 +319,13 @@ async function init() {
     alert(`Dashboard JS crashed: ${e?.message || e}`);
   }
 }
+
+async function fundPact(pactId, amount) {
+  const wei = ethers.parseUnits(amount, 18);
+
+  await mnee.approve(PACT_ESCROW_ADDRESS, wei);
+  await escrow.fund(pactId, wei);
+}
+
 
 init();

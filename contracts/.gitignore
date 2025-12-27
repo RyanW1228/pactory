@@ -12,3 +12,4 @@ docs/
 
 # Dotenv file
 .env
+lib/.DS_Store
