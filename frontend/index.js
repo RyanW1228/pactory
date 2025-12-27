@@ -7,7 +7,6 @@ const balanceSpan = document.getElementById("ethBalance");
 const mneeBalanceSpan = document.getElementById("mneeBalance");
 const viewPactsButton = document.getElementById("viewPactsButton");
 const logoutButton = document.getElementById("logoutButton");
-const stored = localStorage.getItem("address");
 const defaultModeText = document.getElementById("defaultModeText");
 const toggleDefaultModeButton = document.getElementById(
   "toggleDefaultModeButton"
@@ -20,9 +19,13 @@ const ERC20_ABI = [
 
 await loadFromLocalStorage();
 
-if (stored) {
+// Show correct buttons on load
+if (localStorage.getItem("address")) {
   logoutButton.style.display = "inline-block";
   connectButton.style.display = "none";
+} else {
+  logoutButton.style.display = "none";
+  connectButton.style.display = "inline-block";
 }
 
 async function showBalances(provider, address) {
@@ -51,16 +54,21 @@ async function connect() {
   const accounts = await window.ethereum.request({
     method: "eth_requestAccounts",
   });
+
   const address = accounts[0];
 
+  // Persist address (soft login)
   localStorage.setItem("address", address);
   accountSpan.innerText = address;
+
   connectButton.style.display = "none";
   logoutButton.style.display = "inline-block";
 
+  // Default mode per wallet
   setDefaultMode(address, getDefaultMode(address));
   renderDefaultModeUI(address);
 
+  // Read balances via RPC (as before)
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   await showBalances(provider, address);
 }
@@ -68,6 +76,9 @@ async function connect() {
 async function loadFromLocalStorage() {
   const stored = localStorage.getItem("address");
   if (!stored) {
+    accountSpan.innerText = "Not connected";
+    balanceSpan.innerText = "-";
+    mneeBalanceSpan.innerText = "-";
     defaultModeText.innerText = "-";
     toggleDefaultModeButton.disabled = true;
     return;
@@ -111,7 +122,6 @@ viewPactsButton.onclick = () => {
     alert("Please connect a wallet first so we know which address to show.");
     return;
   }
-
   window.location.href = "./pacts-dashboard.html";
 };
 

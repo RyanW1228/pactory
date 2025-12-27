@@ -1,0 +1,20 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "better-sqlite3": "^12.5.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "ethers": "^6.16.0",
+    "express": "^5.2.1"
+  }
+}
