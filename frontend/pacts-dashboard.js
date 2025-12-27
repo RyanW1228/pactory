@@ -1,6 +1,13 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS } from "./constants.js";
+import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
+import { PactEscrowABI } from "./pactEscrowAbi.js";
 
+const ERC20ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+];
+
+let provider, signer, escrow, mnee;
 // Config
 const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
 
@@ -45,14 +52,14 @@ const CREATOR_SECTIONS = [
   "Archive",
 ];
 
-const pact = await escrow.pacts(pactId);
+// const pact = await escrow.pacts(pactId);
 
-console.log({
-  sponsor: pact.sponsor,
-  creator: pact.creator,
-  status: pact.status,
-  funded: pact.fundedAmount.toString()
-});
+// console.log({
+//   sponsor: pact.sponsor,
+//   creator: pact.creator,
+//   status: pact.status,
+//   funded: pact.fundedAmount.toString()
+// });
 
 
 // View mode storage
@@ -277,6 +284,31 @@ async function loadMneeBalanceSafe() {
   }
 }
 
+async function initContracts() {
+  if (!window.ethereum) {
+    alert("MetaMask not found");
+    return;
+  }
+
+  provider = new ethers.BrowserProvider(window.ethereum);
+  signer = await provider.getSigner();
+
+  escrow = new ethers.Contract(
+    PACT_ESCROW_ADDRESS,
+    PactEscrowABI,
+    signer
+  );
+
+  mnee = new ethers.Contract(
+    MNEE_ADDRESS,
+    ERC20ABI,
+    signer
+  );
+
+  console.log("✅ Dashboard contracts ready");
+}
+
+
 // Init
 async function init() {
   try {
@@ -329,3 +361,14 @@ async function fundPact(pactId, amount) {
 
 
 init();
+
+window.addEventListener("load", async () => {
+  try {
+    await initContracts();
+    // now safe to call escrow / mnee
+    await refreshDashboard(); 
+  } catch (e) {
+    console.error("Init failed", e);
+  }
+});
+

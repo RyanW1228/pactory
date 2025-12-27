@@ -1,6 +1,6 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
 import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
-import PactEscrowABI from "./abis/PactEscrow.json" assert { type: "json" };
+import { PactEscrowABI } from "./pactEscrowAbi.js";
 
 
 const ERC20_ABI = [
@@ -1392,16 +1392,41 @@ sendForReviewButton.onclick = async () => {
 };
 
 
+
+
 // Init
+// ✅ INIT — CORRECT ORDER
 renderRole();
 validateCounterparty();
-renderProgressMilestones();
-updateMilestoneControlsVisibility();
+
+// FIRST: enable/disable sections (may reset state)
 renderProgressPayEnabled();
-renderAonRewards();
-updateAonRewardControlsVisibility();
 renderAonPayEnabled();
-renderPayoutGraph();
+
+// THEN: render their contents
+renderProgressMilestones();
+renderAonRewards();
+
+// THEN: controls + visuals
+updateMilestoneControlsVisibility();
+updateAonRewardControlsVisibility();
+
 syncSliderBounds();
 updateSliderReadout();
+renderPayoutGraph();
+
 }
+
+window.addEventListener("load", async () => {
+  if (!window.ethereum) {
+    alert("MetaMask not detected");
+    return;
+  }
+
+  try {
+    await initContracts();
+    console.log("✅ Contracts initialized");
+  } catch (e) {
+    console.error("❌ initContracts failed", e);
+  }
+});
