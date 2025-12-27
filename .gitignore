@@ -5,3 +5,7 @@ backend/.env
 **/node_modules/
 contracts/out/
 contracts/cache/
+
+backend/*.db
+backend/*.db-journal
+backend/*.db-wal
