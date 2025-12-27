@@ -1,5 +1,5 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS } from "./constants.js";
+import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
 
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -7,6 +7,9 @@ const ERC20_ABI = [
 ];
 
 // DOMs
+// const provider = new ethers.JsonRpcProvider(RPC_URL); // old line
+let provider, signer, escrow, mnee;
+
 const exitButton = document.getElementById("exitButton");
 
 const defaultRoleText = document.getElementById("defaultRoleText");
@@ -85,7 +88,6 @@ if (!localStorage.getItem(viewModeKey(address))) {
   localStorage.setItem(viewModeKey(address), "sponsor");
 }
 
-const provider = new ethers.JsonRpcProvider(RPC_URL);
 
 let progressMilestones = [{ views: "", payout: "" }]; // start with one
 let milestonesLocked = false;
@@ -1142,6 +1144,24 @@ async function verifyEthOwnershipOrAlert() {
   return true;
 }
 
+
+async function initContracts() {
+  provider = new ethers.BrowserProvider(window.ethereum);
+  signer = await provider.getSigner();
+
+  escrow = new ethers.Contract(
+    PACT_ESCROW_ADDRESS,
+    PactEscrowABI,
+    signer
+  );
+
+  mnee = new ethers.Contract(
+    MNEE_ADDRESS,
+    ERC20ABI,
+    signer
+  );
+}
+
 // Handlers
 toggleRoleButton.onclick = () => {
   const cur = getRole(address);
@@ -1336,6 +1356,8 @@ viewsSlider?.addEventListener("input", () => {
   renderPayoutGraph();
 });
 
+
+
 sendForReviewButton.onclick = async () => {
   setSendStatus("");
 
@@ -1484,6 +1506,18 @@ sendForReviewButton.onclick = async () => {
     sendForReviewButton.style.cursor = "pointer";
   }
 };
+
+async function handleCreatePact() {
+  const tx = await escrow.createPact(
+    counterpartyAddress,
+    ethers.parseUnits(maxPayoutUSD, 18),
+    durationSeconds
+  );
+
+  await tx.wait();
+  alert("Pact created!");
+}
+
 
 // Init
 renderRole();

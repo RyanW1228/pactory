@@ -1,5 +1,12 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
 import { MNEE_ADDRESS, RPC_URL } from "./constants.js";
+import PactEscrowABI from "./abis/PactEscrow.json";
+import ERC20ABI from "./abis/ERC20.json";
+
+const ESCROW_ADDRESS = "0x..."; // deployed testnet address
+const MNEE_ADDRESS = "0x...";   // testnet MNEE or mock
+
+let provider, signer, escrow, mnee;
 
 const connectButton = document.getElementById("connectButton");
 const accountSpan = document.getElementById("account");
@@ -71,6 +78,23 @@ async function connect() {
   // Read balances via RPC (as before)
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   await showBalances(provider, address);
+}
+
+async function setupContracts(params) {
+  provider = new ethers.BrowserProvider(window.ethereum);
+  signer = await provider.getSigner();
+
+  escrow = new ethers.Contract(
+    ESCROW_ADDRESS,
+    PactEscrowABI,
+    signer);
+
+  mnee = new ethers.Contract(
+    MNEE_ADDRESS, ERC20ABI, signer
+  );
+
+  
+  
 }
 
 async function loadFromLocalStorage() {
