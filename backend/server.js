@@ -4,9 +4,13 @@ import cors from "cors";
 import Database from "better-sqlite3";
 import { ethers } from "ethers";
 import rateLimit from "express-rate-limit";
+import "dotenv/config";
 
 const app = express();
 app.set("trust proxy", 1);
+
+const verifierWallet = new ethers.Wallet(process.env.VERIFIER_PRIVATE_KEY);
+console.log("Verifier address:", verifierWallet.address);
 
 // --------------------
 // ✅ CORS + Preflight (put BEFORE limiter + routes)
@@ -18,8 +22,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-//app.options("/.*/", cors());
-
 app.use(express.json({ limit: "1mb" }));
 
 // --------------------
@@ -150,6 +152,39 @@ function canonPayments(arr) {
         x.payout > 0
     )
     .sort((a, b) => a.views - b.views || a.payout - b.payout);
+}
+
+// ✅ max payout = max(progress total payout) + sum(all AON bonus payouts)
+function computeMaxPayoutUsd(rowLike) {
+  const progressEnabled =
+    rowLike.progressEnabled != null
+      ? !!rowLike.progressEnabled
+      : !!rowLike.progress_enabled;
+
+  const aonEnabled =
+    rowLike.aonEnabled != null ? !!rowLike.aonEnabled : !!rowLike.aon_enabled;
+
+  const progressArr = canonPayments(
+    Array.isArray(rowLike.progressMilestones)
+      ? rowLike.progressMilestones
+      : JSON.parse(rowLike.progress_json || "[]")
+  );
+
+  const aonArr = canonPayments(
+    Array.isArray(rowLike.aonRewards)
+      ? rowLike.aonRewards
+      : JSON.parse(rowLike.aon_json || "[]")
+  );
+
+  const progressMax =
+    progressEnabled && progressArr.length
+      ? Math.max(...progressArr.map((x) => x.payout))
+      : 0;
+
+  const aonMax =
+    aonEnabled && aonArr.length ? aonArr.reduce((s, x) => s + x.payout, 0) : 0;
+
+  return progressMax + aonMax;
 }
 
 function pactEquivalent(oldPactRow, incoming) {
@@ -335,8 +370,8 @@ app.post("/api/pacts", (req, res) => {
       if (oldId != null) {
         db.prepare(
           `UPDATE pacts
-     SET status = 'replaced', updated_at = ?
-     WHERE id = ?`
+           SET status = 'replaced', updated_at = ?
+           WHERE id = ?`
         ).run(t, oldId);
       }
 
@@ -374,7 +409,6 @@ app.get("/api/pacts", (req, res) => {
     }
 
     // bucket logic
-    // bucket logic
     if (bucket === "sent_for_review") {
       where +=
         (where ? " AND " : "") + "status=? AND lower(proposer_address)=?";
@@ -406,7 +440,10 @@ app.get("/api/pacts", (req, res) => {
 
     const rows = db
       .prepare(
-        `SELECT id, name, created_at, sponsor_address, creator_address, status, proposer_address, proposer_role, video_link
+        `SELECT id, name, created_at, sponsor_address, creator_address, status,
+        proposer_address, proposer_role, video_link,
+        progress_enabled, progress_json,
+        aon_enabled, aon_json
          FROM pacts
          WHERE ${where}
          ORDER BY id DESC
@@ -414,7 +451,25 @@ app.get("/api/pacts", (req, res) => {
       )
       .all(...params);
 
-    res.json({ ok: true, rows });
+    const outRows = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      created_at: r.created_at,
+      sponsor_address: r.sponsor_address,
+      creator_address: r.creator_address,
+      status: r.status,
+      proposer_address: r.proposer_address,
+      proposer_role: r.proposer_role,
+      video_link: r.video_link,
+      max_payout_usd: computeMaxPayoutUsd(r),
+    }));
+
+    const withMax = rows.map((r) => ({
+      ...r,
+      max_payout_usd: computeMaxPayoutUsd(r),
+    }));
+
+    res.json({ ok: true, rows: outRows });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -429,6 +484,8 @@ app.get("/api/pacts/:id", (req, res) => {
     const row = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
     if (!row) return res.status(404).json({ ok: false, error: "Not found" });
 
+    const maxPayoutUsd = computeMaxPayoutUsd(row);
+
     const replaced =
       row.replaces_pact_id != null
         ? db.prepare(`SELECT * FROM pacts WHERE id=?`).get(row.replaces_pact_id)
@@ -438,12 +495,14 @@ app.get("/api/pacts/:id", (req, res) => {
       ok: true,
       pact: {
         ...row,
+        max_payout_usd: maxPayoutUsd,
         progress_milestones: JSON.parse(row.progress_json || "[]"),
         aon_rewards: JSON.parse(row.aon_json || "[]"),
       },
       replaced_pact: replaced
         ? {
             ...replaced,
+            max_payout_usd: computeMaxPayoutUsd(replaced),
             progress_milestones: JSON.parse(replaced.progress_json || "[]"),
             aon_rewards: JSON.parse(replaced.aon_json || "[]"),
           }
@@ -593,7 +652,7 @@ app.delete("/api/pacts/:id", (req, res) => {
     const isCounterparty = normAddr(pact.counterparty_address) === addr;
 
     if (!isProposer && !isCounterparty) {
-      throw new Error("Not authorized to delete this pact");
+      throw new Error("Not authorized to delete/reject this pact");
     }
 
     // Only allowed while sent_for_review

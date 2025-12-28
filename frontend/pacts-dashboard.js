@@ -189,6 +189,17 @@ function attachManageHandler(listEl) {
   };
 }
 
+function formatUsd(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "-";
+  return `$${x.toFixed(2)}`;
+}
+
+function maxPayoutLine(p) {
+  // server should return max_payout_usd
+  return `Max payout: ${formatUsd(p?.max_payout_usd)}`;
+}
+
 function displayPactTitle(p) {
   const n = String(p?.name || "").trim();
   return n ? n : `Pact #${p.id}`;
@@ -232,6 +243,7 @@ async function loadSentForReview(mode) {
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
             )}</div>
@@ -289,6 +301,7 @@ async function loadAwaitingYourReview(mode) {
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
             )}</div>
@@ -398,6 +411,9 @@ async function loadCreated(mode) {
             <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
               <div style="font-weight:600;">${displayPactTitle(p)}</div>
               <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+              <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(
+                p
+              )}</div>
               <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
                 p.created_at
               )}</div>
@@ -454,7 +470,15 @@ async function initContracts() {
   escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, provider);
   mnee = new ethers.Contract(MNEE_ADDRESS, ERC20ABI, provider);
 
-  console.log("✅ Dashboard contracts ready");
+  // ✅ expose for debugging in DevTools
+  window.provider = provider;
+  window.escrow = escrow;
+  window.mnee = mnee;
+
+  console.log("✅ Dashboard contracts ready", {
+    escrow: escrow.target,
+    mnee: mnee.target,
+  });
 }
 
 // Init

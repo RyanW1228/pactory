@@ -3,7 +3,8 @@
 const API_BASE = "http://localhost:3000";
 
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS } from "./constants.js";
+import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
+import { PactEscrowABI } from "./pactEscrowAbi.js";
 
 // DOM
 const backButton = document.getElementById("backButton");
@@ -98,23 +99,27 @@ function maxPayoutMnee(pact) {
     : [];
   const aon = Array.isArray(pact?.aon_rewards) ? pact.aon_rewards : [];
 
-  let max = 0;
-
+  // progress: take MAX single payout
+  let progressMax = 0;
   for (const x of prog) {
     const v = Number(x?.payout);
-    if (Number.isFinite(v) && v > max) max = v;
-  }
-  for (const x of aon) {
-    const v = Number(x?.payout);
-    if (Number.isFinite(v) && v > max) max = v;
+    if (Number.isFinite(v) && v > progressMax) progressMax = v;
   }
 
-  // keep 2 decimals for display, but return number
-  return max;
+  // aon: SUM all payouts (because they can all trigger)
+  let aonSum = 0;
+  for (const x of aon) {
+    const v = Number(x?.payout);
+    if (Number.isFinite(v) && v > 0) aonSum += v;
+  }
+
+  return progressMax + aonSum;
 }
 
 async function getMneeBalanceAndDecimals(userAddress) {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  if (!window.ethereum) throw new Error("MetaMask not found");
+
+  const provider = new ethers.BrowserProvider(window.ethereum);
 
   const ERC20_ABI = [
     "function balanceOf(address) view returns (uint256)",
@@ -207,12 +212,19 @@ if (data.replaced_pact) {
 titleEl.innerText = String(p.name || "").trim() ? p.name : `Pact #${p.id}`;
 
 // Render main content
+const maxPayout = maxPayoutMnee(p);
+
 contentEl.innerHTML = `
   <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
     <div><strong>Status:</strong> ${prettyStatus(p.status)}</div>
     <div><strong>Created:</strong> ${formatEastern(p.created_at)}</div>
     <div><strong>Sponsor:</strong> ${prettyAddr(p.sponsor_address)}</div>
     <div><strong>Creator:</strong> ${prettyAddr(p.creator_address)}</div>
+
+    <div><strong>Max payout:</strong> $${
+      Number.isFinite(maxPayout) ? maxPayout.toFixed(2) : "-"
+    }</div>
+
     <div><strong>Video Link:</strong> ${
       String(p.video_link || "").trim()
         ? `<a href="${p.video_link}" target="_blank" rel="noopener noreferrer">${p.video_link}</a>`
@@ -320,53 +332,146 @@ if (canApproveAndFund) {
   fundBtn.style.cursor = "pointer";
 
   fundBtn.onclick = async () => {
-    // 1) Reminders / confirmation
+    // Must be MetaMask + sponsor
+    if (!window.ethereum) {
+      alert("MetaMask not found.");
+      return;
+    }
+
+    // 1) compute required max payout (in MNEE terms)
+    const required = maxPayoutMnee(p); // you already have this
     const link = String(p.video_link || "").trim();
-    const required = maxPayoutMnee(p);
 
-    const msg =
+    if (!Number.isFinite(required) || required <= 0) {
+      alert("Cannot fund: pact has no valid payout amounts.");
+      return;
+    }
+
+    const ok = confirm(
       `Before you approve and fund:\n\n` +
-      `• Verify the video link is correct (opens the right creator video):\n  ${
-        link || "(missing)"
-      }\n\n` +
-      `• This action is permanent.\n` +
-      `  After funding, cancelling the pact will require approval by BOTH parties.\n\n` +
-      `• Make sure you trust the counterparty address and pact terms.\n` +
-      `• Funding will lock up up to the maximum payout amount until the pact ends / settles.\n\n` +
-      `Max funding required: ${required.toFixed(2)} MNEE\n\n` +
-      `Continue?`;
-
-    const ok = confirm(msg);
+        `• Verify the video link:\n  ${link || "(missing)"}\n\n` +
+        `• This will (1) create the on-chain pact if needed, (2) approve MNEE, (3) fund the pact.\n\n` +
+        `Max funding required: ${required.toFixed(2)} MNEE\n\n` +
+        `Continue?`
+    );
     if (!ok) return;
 
-    // 2) Balance check: sponsor must have >= max required
+    fundBtn.disabled = true;
+    fundBtn.style.opacity = "0.7";
+    fundBtn.style.cursor = "not-allowed";
+
     try {
-      if (!Number.isFinite(required) || required <= 0) {
-        alert("Cannot fund: pact has no valid payout amounts.");
+      // 2) get signer (MetaMask)
+      const browserProvider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await browserProvider.getSigner();
+
+      const net = await browserProvider.getNetwork();
+      if (Number(net.chainId) !== 11155111) {
+        alert(
+          "Wrong network in MetaMask. Please switch to Sepolia and try again."
+        );
+        fundBtn.disabled = false;
+        fundBtn.style.opacity = "1";
+        fundBtn.style.cursor = "pointer";
         return;
       }
 
-      const { raw, decimals } = await getMneeBalanceAndDecimals(address);
+      // sanity: make sure the connected wallet matches the logged-in address
+      const signerAddr = await signer.getAddress();
+      if (normAddr(signerAddr) !== normAddr(address)) {
+        alert(
+          `MetaMask account mismatch.\n\n` +
+            `Logged in as: ${address}\n` +
+            `MetaMask is: ${signerAddr}\n\n` +
+            `Switch accounts in MetaMask and try again.`
+        );
+        fundBtn.disabled = false;
+        fundBtn.style.opacity = "1";
+        fundBtn.style.cursor = "pointer";
+        return;
+      }
+
+      const escrow = new ethers.Contract(
+        PACT_ESCROW_ADDRESS,
+        PactEscrowABI,
+        signer
+      );
+
+      const ERC20_ABI = [
+        "function approve(address spender, uint256 amount) returns (bool)",
+        "function allowance(address owner, address spender) view returns (uint256)",
+        "function balanceOf(address) view returns (uint256)",
+        "function decimals() view returns (uint8)",
+      ];
+      const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
+
+      const decimals = await token.decimals();
+
+      // IMPORTANT: your UI payouts are in dollars; treat as MNEE with 2dp display
+      // convert to token base units using token decimals
       const needRaw = ethers.parseUnits(required.toFixed(2), decimals);
 
-      if (raw < needRaw) {
-        const have = Number(ethers.formatUnits(raw, decimals));
+      // 3) make sure sponsor has enough
+      const balRaw = await token.balanceOf(address);
+      if (balRaw < needRaw) {
+        const have = Number(ethers.formatUnits(balRaw, decimals));
         alert(
           `Insufficient MNEE.\n\n` +
             `You have: ${have.toFixed(4)} MNEE\n` +
             `You need at least: ${required.toFixed(2)} MNEE`
         );
+        fundBtn.disabled = false;
+        fundBtn.style.opacity = "1";
+        fundBtn.style.cursor = "pointer";
         return;
       }
 
-      // 3) For now: placeholder (since on-chain funding isn't built yet)
-      alert(
-        `Balance check passed.\n\n` +
-          `Next step: wire this button to on-chain approve + fund.\n` +
-          `Required max: ${required.toFixed(2)} MNEE`
-      );
+      // 4) create pact on-chain IF it doesn't exist yet
+      //    (if it already exists, sponsor will be non-zero)
+      let onchain = null;
+      try {
+        onchain = await escrow.pacts(id);
+      } catch {
+        // ignore; not fatal
+      }
+
+      const sponsorOnchain = onchain?.sponsor ? String(onchain.sponsor) : "";
+      const exists =
+        sponsorOnchain &&
+        sponsorOnchain !== "0x0000000000000000000000000000000000000000";
+
+      if (!exists) {
+        // createPact(pactId, creator, maxPayoutRaw, durationSeconds)
+        const txCreate = await escrow.createPact(
+          id,
+          p.creator_address,
+          needRaw,
+          p.duration_seconds
+        );
+        await txCreate.wait();
+      }
+
+      // 5) approve IF needed (avoid unnecessary tx)
+      const allowance = await token.allowance(address, PACT_ESCROW_ADDRESS);
+      if (allowance < needRaw) {
+        const txApprove = await token.approve(PACT_ESCROW_ADDRESS, needRaw);
+        await txApprove.wait();
+      }
+
+      // 6) fund(pactId) — contract pulls pact.maxPayout
+      const txFund = await escrow.fund(id);
+      await txFund.wait();
+
+      alert("✅ Pact created (if needed) + approved + funded successfully!");
+
+      // optional: refresh / mark needs refresh
+      localStorage.setItem("pactsNeedsRefresh", "1");
+      window.location.reload();
     } catch (e) {
-      alert(`Could not check MNEE balance.\n\n${e?.message || e}`);
+      alert(`Approve/Fund failed:\n\n${e?.shortMessage || e?.message || e}`);
+      fundBtn.disabled = false;
+      fundBtn.style.opacity = "1";
+      fundBtn.style.cursor = "pointer";
     }
   };
 

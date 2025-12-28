@@ -2,19 +2,26 @@
 pragma solidity ^0.8.20;
 
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract PactEscrow {
-    IERC20 public immutable mnee;
+    using ECDSA for bytes32;
 
-    constructor(address _mnee) {
+    IERC20 public immutable mnee;
+    address public immutable verifier; // backend signer address
+
+    constructor(address _mnee, address _verifier) {
+        require(_mnee != address(0), "bad mnee");
+        require(_verifier != address(0), "bad verifier");
         mnee = IERC20(_mnee);
+        verifier = _verifier;
     }
 
     enum Status {
         Created,
         Funded,
-        Completed,
-        Refunded
+        Closed
     }
 
     struct Pact {
@@ -23,116 +30,164 @@ contract PactEscrow {
         uint256 maxPayout;
         uint256 deadline;
         Status status;
-        uint256 fundedAmount;
+        uint256 paidOut; // total paid to creator so far
+        bool refunded; // sponsor remainder refunded
     }
 
-    uint256 public pactCount;
     mapping(uint256 => Pact) public pacts;
 
-    // events 
-    event PactCreated( uint256 indexed pactId, address indexed sponsor, address indexed creator, uint256 maxPayout, uint256 deadline);
+    event PactCreated(
+        uint256 indexed pactId,
+        address indexed sponsor,
+        address indexed creator,
+        uint256 maxPayout,
+        uint256 deadline
+    );
     event PactFunded(uint256 indexed pactId, uint256 amount);
-    event PactCompleted(uint256 indexed pactId, uint256 payout);
-    event PactRefunded(uint256 indexed pactId, uint256 amount);
+    event CreatorPaid(
+        uint256 indexed pactId,
+        uint256 totalEarned,
+        uint256 deltaPaid
+    );
+    event SponsorRefunded(uint256 indexed pactId, uint256 amount);
 
-    // side note i love how vs code is completing my code rn
-
-    function createPact(
-    uint256 pactId,
-    address creator,
-    uint256 maxPayout,
-    uint256 durationSeconds
+    // ------------------------------------------------------------
+    // ✅ CREATE: gated by backend signature (matches your DB flow)
+    // ------------------------------------------------------------
+    // Backend signs over: (chainid, this, sponsor, pactId, creator, maxPayout, durationSeconds, expiry)
+    function createPactWithSig(
+        address sponsor,
+        uint256 pactId,
+        address creator,
+        uint256 maxPayout,
+        uint256 durationSeconds,
+        uint256 expiry,
+        bytes calldata sig
     ) external {
+        require(block.timestamp <= expiry, "sig expired");
+        require(sponsor != address(0), "bad sponsor");
         require(pactId > 0, "invalid pact id");
         require(creator != address(0), "invalid creator");
         require(maxPayout > 0, "invalid max payout");
         require(durationSeconds > 0, "invalid duration");
 
-        // prevent overwriting
-        require(pacts[pactId].sponsor == address(0), "pact already exists");
+        // Make sure caller is sponsor (prevents someone else creating a pact for you)
+        require(msg.sender == sponsor, "caller not sponsor");
+
+        // prevent overwrite
+        require(pacts[pactId].sponsor == address(0), "pact exists");
+
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
+            keccak256(
+                abi.encodePacked(
+                    block.chainid,
+                    address(this),
+                    sponsor,
+                    pactId,
+                    creator,
+                    maxPayout,
+                    durationSeconds,
+                    expiry
+                )
+            )
+        );
+
+        require(digest.recover(sig) == verifier, "bad sig");
 
         uint256 deadline = block.timestamp + durationSeconds;
 
         pacts[pactId] = Pact({
-            sponsor: msg.sender,
+            sponsor: sponsor,
             creator: creator,
             maxPayout: maxPayout,
             deadline: deadline,
             status: Status.Created,
-            fundedAmount: 0
+            paidOut: 0,
+            refunded: false
         });
 
-        pactCount++; // analytics only
-
-        emit PactCreated(
-            pactId,
-            msg.sender,
-            creator,
-            maxPayout,
-            deadline
-        );
+        emit PactCreated(pactId, sponsor, creator, maxPayout, deadline);
     }
 
-    function fund(uint256 pactId, uint256 amount) external {
+    // ------------------------------------------------------------
+    // ✅ FUND: pulls pact.maxPayout (no amount param)
+    // ------------------------------------------------------------
+    function fund(uint256 pactId) external {
         Pact storage pact = pacts[pactId];
 
+        require(pact.sponsor != address(0), "pact missing");
         require(msg.sender == pact.sponsor, "not sponsor");
         require(pact.status == Status.Created, "wrong status");
+        require(block.timestamp <= pact.deadline, "expired");
+
+        // transfer first, then change status (prevents weird "Funded" state if transfer fails)
         require(
-            pact.fundedAmount + amount <= pact.maxPayout,
-            "exceeds max"
+            mnee.transferFrom(msg.sender, address(this), pact.maxPayout),
+            "fund failed"
         );
 
-        pact.fundedAmount += amount;
+        pact.status = Status.Funded;
 
-        if (pact.fundedAmount == pact.maxPayout) {
-            pact.status = Status.Funded;
-        }
-
-        require(
-            mnee.transferFrom(msg.sender, address(this), amount),
-            "funding failed"
-        );
-        emit PactFunded(pactId, amount);
+        emit PactFunded(pactId, pact.maxPayout);
     }
 
-
-    function complete(uint256 pactId, uint256 payout) external {
+    // ------------------------------------------------------------
+    // ✅ PAYOUT: backend-authorized incremental payouts
+    // ------------------------------------------------------------
+    function payoutWithSig(
+        uint256 pactId,
+        uint256 totalEarned,
+        uint256 expiry,
+        bytes calldata sig
+    ) external {
         Pact storage pact = pacts[pactId];
+        require(pact.status == Status.Funded, "not funded");
+        require(block.timestamp <= expiry, "sig expired");
+        require(totalEarned <= pact.maxPayout, "earned > max");
+        require(totalEarned >= pact.paidOut, "non-monotonic");
 
-        require(msg.sender == pact.sponsor, "not sponsor");
-        require(pact.status == Status.Funded, "wrong status");
-        require(payout <= pact.fundedAmount, "exceeds max");
-
-        pact.status = Status.Completed;
-
-        require(
-            mnee.transfer(pact.creator, payout),
-            "payout failed"
+        // verify backend signature over (chainid, this, pactId, totalEarned, expiry)
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
+            keccak256(
+                abi.encodePacked(
+                    block.chainid,
+                    address(this),
+                    pactId,
+                    totalEarned,
+                    expiry
+                )
+            )
         );
 
-        uint256 remainder = pact.fundedAmount - payout;
+        require(digest.recover(sig) == verifier, "bad sig");
 
-        if (remainder > 0) {
-            mnee.transfer(pact.sponsor, remainder);
+        uint256 delta = totalEarned - pact.paidOut;
+        pact.paidOut = totalEarned;
+
+        if (delta > 0) {
+            require(mnee.transfer(pact.creator, delta), "pay failed");
         }
-        emit PactCompleted(pactId, payout);
+
+        emit CreatorPaid(pactId, totalEarned, delta);
     }
 
-    function refund(uint256 pactId) external {
+    // ------------------------------------------------------------
+    // ✅ REFUND: after deadline, refund remaining to sponsor
+    // ------------------------------------------------------------
+    function refundAfterDeadline(uint256 pactId) external {
         Pact storage pact = pacts[pactId];
-
+        require(pact.status == Status.Funded, "not funded");
         require(block.timestamp > pact.deadline, "not expired");
-        require(pact.status == Status.Funded, "wrong status");
+        require(!pact.refunded, "already refunded");
 
-        pact.status = Status.Refunded;
+        uint256 remaining = pact.maxPayout - pact.paidOut;
+        pact.refunded = true;
+        pact.status = Status.Closed;
 
-        require(
-            mnee.transfer(pact.sponsor, pact.fundedAmount),
-            "refund failed"
-        );
-        emit PactRefunded(pactId, pact.fundedAmount);
+        if (remaining > 0) {
+            require(mnee.transfer(pact.sponsor, remaining), "refund failed");
+        }
 
-}
-
+        emit SponsorRefunded(pactId, remaining);
+    }
 }
