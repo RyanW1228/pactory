@@ -22,6 +22,8 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
 
+  
+
   CREATE INDEX IF NOT EXISTS idx_pacts_creator ON pacts(creator_address);
   CREATE INDEX IF NOT EXISTS idx_pacts_sponsor ON pacts(sponsor_address);
 
@@ -38,6 +40,19 @@ db.exec(`
     address TEXT NOT NULL,
     expires_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS video_stats (
+  pact_id INTEGER PRIMARY KEY REFERENCES pacts(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,
+  video_url TEXT NOT NULL,
+
+  views INTEGER NOT NULL,
+  likes INTEGER NOT NULL,
+  comments INTEGER NOT NULL,
+
+  last_checked_at TEXT NOT NULL
+);
+
 
   CREATE INDEX IF NOT EXISTS idx_sessions_address ON sessions(address);
 `);

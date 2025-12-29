@@ -4,95 +4,216 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Input Video Link</title>
+    <link rel="stylesheet" href="./loading-screen.css" />
+    <link rel="stylesheet" href="./fireworks.css" />
+    <link rel="stylesheet" href="./music.css" />
     <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
       body {
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
-          Arial, sans-serif;
-        max-width: 900px;
-        margin: 24px auto;
-        padding: 0 16px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+        min-height: 100vh;
+        padding: 20px;
+        color: #1565C0;
       }
-      .card {
-        border: 1px solid #ddd;
+
+      .container {
+        max-width: 700px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow: 0 20px 60px rgba(33, 150, 243, 0.2);
+        backdrop-filter: blur(10px);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
+      h2 {
+        font-size: 2rem;
+        background: linear-gradient(135deg, #1976D2, #42A5F5);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .meta {
+        font-size: 0.9rem;
+        color: #64B5F6;
+        margin-bottom: 24px;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
         border-radius: 12px;
-        padding: 14px;
-        margin-top: 14px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
       }
+
+      .card {
+        background: linear-gradient(135deg, #F5F9FF 0%, #E8F4FD 100%);
+        border-radius: 16px;
+        padding: 24px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
       .row {
-        margin: 10px 0;
+        margin-bottom: 20px;
       }
+
       label {
         font-weight: 600;
         display: block;
-        margin-bottom: 6px;
+        margin-bottom: 10px;
+        color: #0277BD;
+        font-size: 0.95rem;
       }
+
       input[type="url"],
       input[type="text"] {
         width: 100%;
-        padding: 10px;
-        border-radius: 10px;
-        border: 1px solid #ccc;
+        padding: 14px 16px;
+        border-radius: 12px;
+        border: 2px solid rgba(33, 150, 243, 0.3);
         outline: none;
+        font-size: 1rem;
+        background: white;
+        color: #1565C0;
+        transition: all 0.3s;
       }
+
+      input[type="url"]:focus,
+      input[type="text"]:focus {
+        border-color: #2196F3;
+        box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+      }
+
+      .button-group {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-top: 24px;
+      }
+
       button {
-        padding: 10px 14px;
-        border-radius: 10px;
+        padding: 14px 24px;
+        border-radius: 12px;
         border: none;
         cursor: pointer;
+        font-size: 0.95rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        flex: 1;
       }
+
       .btn-primary {
-        background: #2c3e50;
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
         color: white;
       }
+
+      .btn-primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
       .btn-secondary {
-        background: #eee;
+        background: linear-gradient(135deg, #64B5F6, #42A5F5);
+        color: white;
       }
+
+      .btn-secondary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+      }
+
       .status {
-        margin-top: 10px;
-        font-size: 13px;
-        color: crimson;
+        margin-top: 16px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 500;
         min-height: 16px;
+        transition: all 0.3s;
       }
+
+      .status:empty {
+        display: none;
+      }
+
+      .status:not(.ok) {
+        color: #C62828;
+        background: rgba(244, 67, 54, 0.1);
+      }
+
       .status.ok {
-        color: green;
-      }
-      .meta {
-        font-size: 12px;
-        opacity: 0.8;
+        color: #2E7D32;
+        background: rgba(76, 175, 80, 0.1);
       }
     </style>
   </head>
   <body>
-    <button id="backButton" class="btn-secondary">← Back</button>
-
-    <h2 id="title" style="margin-top: 14px">Input Video Link</h2>
-    <div class="meta" id="meta"></div>
-
-    <div class="card">
-      <div class="row">
-        <label for="videoLinkInput"
-          >Video link (Instagram / Reels / etc.)</label
-        >
-        <input
-          id="videoLinkInput"
-          type="url"
-          placeholder="https://..."
-          autocomplete="off"
-        />
+    <div class="container">
+      <div class="header">
+        <h2 id="title">🎬 Input Video Link</h2>
+        <button id="backButton" class="btn-secondary">← Back</button>
       </div>
 
-      <div style="display: flex; gap: 10px; align-items: center">
-        <button id="saveButton" class="btn-primary" type="button">
-          Save Video Link
-        </button>
-        <button id="cancelButton" class="btn-secondary" type="button">
-          Cancel
-        </button>
-      </div>
+      <div class="meta" id="meta"></div>
 
-      <div id="status" class="status"></div>
+      <div class="card">
+        <div class="row">
+          <label for="videoLinkInput">Video link (Instagram / Reels / etc.)</label>
+          <input
+            id="videoLinkInput"
+            type="url"
+            placeholder="https://..."
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="button-group">
+          <button id="saveButton" class="btn-primary" type="button">
+            💾 Save Video Link
+          </button>
+          <button id="cancelButton" class="btn-secondary" type="button">
+            Cancel
+          </button>
+        </div>
+
+        <div id="status" class="status"></div>
+      </div>
     </div>
 
+    <script type="module">
+      import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
+      import { initMusic } from './music.js';
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          initLoadingScreen();
+          initCursorBackground();
+          initMusic();
+        });
+      } else {
+        initLoadingScreen();
+        initCursorBackground();
+        initMusic();
+      }
+    </script>
     <script type="module" src="./video-link.js"></script>
   </body>
 </html>

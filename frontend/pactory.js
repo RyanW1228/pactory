@@ -1,6 +1,7 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
 import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
+import { triggerFireworks } from "./fireworks.js";
 
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -69,7 +70,7 @@ if (!sendForReviewButton) {
 function setSendStatus(msg, ok = false) {
   if (!sendForReviewStatus) return;
   sendForReviewStatus.innerText = msg || "";
-  sendForReviewStatus.style.color = ok ? "green" : "crimson";
+  sendForReviewStatus.className = "status-text " + (ok ? "status-ok" : "status-error");
 }
 
 //const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
@@ -286,48 +287,46 @@ function renderProgressMilestones() {
       const rateText = impliedRateText(i);
 
       return `
-        <div style="display:flex; align-items:center; gap:16px; margin-bottom:10px;">
-          <div style="width:90px; font-weight:600;">
-            Milestone ${i + 1}
+        <div class="milestone-row">
+          <div class="milestone-label">Milestone ${i + 1}</div>
+
+          <div class="milestone-inputs">
+            <div>
+              <label style="font-size: 0.85rem; margin-bottom: 4px;">Views</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value="${m.views}"
+                data-index="${i}"
+                data-field="views"
+                ${ro}
+                ${dis}
+              />
+            </div>
+
+            <div>
+              <label style="font-size: 0.85rem; margin-bottom: 4px;">Total Payout ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value="${m.payout}"
+                data-index="${i}"
+                data-field="payout"
+                ${ro}
+                ${dis}
+              />
+            </div>
           </div>
 
-          <div>
-            <label>Views</label><br />
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value="${m.views}"
-              data-index="${i}"
-              data-field="views"
-              style="width:120px;"
-              ${ro}
-              ${dis}
-            />
-          </div>
-
-          <div>
-            <label>Total Payout ($)</label><br />
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value="${m.payout}"
-              data-index="${i}"
-              data-field="payout"
-              style="width:120px;"
-              ${ro}
-              ${dis}
-            />
-          </div>
-
-          <div style="min-width:260px;">
+          <div class="rate-display">
             ${
               i === 0
-                ? `<div style="font-size:12px; opacity:0.7;">Implied rate</div>`
+                ? `<div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">Implied rate</div>`
                 : `<div style="height:14px;"></div>`
             }
-            <div id="rate-${i}" style="font-weight:600;">
+            <div id="rate-${i}" style="font-weight:600; color: #0277BD;">
               ${rateText || "-"}
             </div>
           </div>
@@ -440,44 +439,42 @@ function renderAonRewards() {
       const rewardText = aonRewardText(i);
 
       return `
-        <div style="display:flex; align-items:center; gap:16px; margin-bottom:10px;">
-          <div style="width:90px; font-weight:600;">
-            Reward ${i + 1}
+        <div class="reward-row">
+          <div class="milestone-label">Reward ${i + 1}</div>
+
+          <div class="milestone-inputs">
+            <div>
+              <label style="font-size: 0.85rem; margin-bottom: 4px;">Views</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value="${m.views}"
+                data-index="${i}"
+                data-field="views"
+                ${ro}
+                ${dis}
+              />
+            </div>
+
+            <div>
+              <label style="font-size: 0.85rem; margin-bottom: 4px;">Reward Payout ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value="${m.payout}"
+                data-index="${i}"
+                data-field="payout"
+                ${ro}
+                ${dis}
+              />
+            </div>
           </div>
 
-          <div>
-            <label>Views</label><br />
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value="${m.views}"
-              data-index="${i}"
-              data-field="views"
-              style="width:120px;"
-              ${ro}
-              ${dis}
-            />
-          </div>
-
-          <div>
-            <label>Reward Payout ($)</label><br />
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value="${m.payout}"
-              data-index="${i}"
-              data-field="payout"
-              style="width:120px;"
-              ${ro}
-              ${dis}
-            />
-          </div>
-
-          <div style="min-width:320px;">
-            <div style="font-size:12px; opacity:0.7;">Reward</div>
-            <div id="aon-reward-${i}" style="font-weight:600;">
+          <div class="rate-display" style="min-width: 320px;">
+            <div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">Reward</div>
+            <div id="aon-reward-${i}" style="font-weight:600; color: #0277BD;">
               ${rewardText || "-"}
             </div>
           </div>
@@ -911,6 +908,7 @@ function validateCounterparty() {
 
   if (!value) {
     counterpartyStatus.innerText = "";
+    counterpartyStatus.className = "status-text";
     return false;
   }
 
@@ -918,16 +916,18 @@ function validateCounterparty() {
     counterpartyStatus.innerText = `Invalid ${
       role === "sponsor" ? "Creator" : "Sponsor"
     } address`;
-
+    counterpartyStatus.className = "status-text status-error";
     return false;
   }
 
   if (value.toLowerCase() === address.toLowerCase()) {
     counterpartyStatus.innerText = `${otherParty} cannot be your own address`;
+    counterpartyStatus.className = "status-text status-error";
     return false;
   }
 
   counterpartyStatus.innerText = `✓ Valid ${otherParty} address`;
+  counterpartyStatus.className = "status-text status-ok";
   return true;
 }
 
@@ -938,30 +938,36 @@ function validateDuration() {
 
   if (![d, h, m].every(Number.isInteger)) {
     durationStatus.innerText = "Duration values must be integers";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (d < 0 || h < 0 || m < 0) {
     durationStatus.innerText = "Duration values cannot be negative";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (h > 23) {
     durationStatus.innerText = "Hours must be between 0 and 23";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (m > 59) {
     durationStatus.innerText = "Minutes must be between 0 and 59";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (d === 0 && h === 0 && m === 0) {
     durationStatus.innerText = "Duration must be greater than 0";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   durationStatus.innerText = "✓ Valid duration";
+  durationStatus.className = "status-text status-ok";
   return true;
 }
 
@@ -1263,6 +1269,7 @@ addMilestoneButton.onclick = () => {
 
   if (progressMilestones.length >= MAX_MILESTONES) {
     ppStatus.innerText = "Maximum of 10 milestones reached.";
+    ppStatus.className = "status-text status-error";
     return;
   }
 
@@ -1287,11 +1294,13 @@ saveMilestonesButton.onclick = () => {
   const result = validateMilestonesAndExplain();
   if (!result.ok) {
     ppStatus.innerText = result.msg;
+    ppStatus.className = "status-text status-error";
     return;
   }
 
   milestonesLocked = true;
   ppStatus.innerText = "✓ Saved. Progress Pay is locked.";
+  ppStatus.className = "status-text status-ok";
   renderProgressMilestones();
   updateMilestoneControlsVisibility();
   renderPayoutGraph();
@@ -1331,6 +1340,7 @@ addAonRewardButton.onclick = () => {
 
   if (aonRewards.length >= MAX_MILESTONES) {
     aonStatus.innerText = "Maximum of 10 rewards reached.";
+    aonStatus.className = "status-text status-error";
     return;
   }
 
@@ -1362,6 +1372,7 @@ saveAonRewardButton.onclick = () => {
 
   aonRewardsLocked = true;
   aonStatus.innerText = "✓ Saved. All-or-Nothing Pay is locked.";
+  aonStatus.className = "status-text status-ok";
   renderAonRewards();
   updateAonRewardControlsVisibility();
   renderPayoutGraph();
@@ -1525,7 +1536,14 @@ sendForReviewButton.onclick = async () => {
     }
 
     setSendStatus("✓ Successfully saved. Redirecting...", true);
-    window.location.replace("./pacts-dashboard.html");
+    
+    // Trigger fireworks celebration!
+    triggerFireworks();
+    
+    // Redirect after a short delay to see fireworks
+    setTimeout(() => {
+      window.location.replace("./pacts-dashboard.html");
+    }, 2000);
     return;
   } finally {
     // unlock UI (won’t matter if redirect happens)

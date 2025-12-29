@@ -2,199 +2,551 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Pactory</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pactory - Create Pact</title>
+    <link rel="stylesheet" href="./loading-screen.css" />
+    <link rel="stylesheet" href="./fireworks.css" />
+    <link rel="stylesheet" href="./music.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+        min-height: 100vh;
+        padding: 20px;
+        color: #1565C0;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow: 0 20px 60px rgba(33, 150, 243, 0.2);
+        backdrop-filter: blur(10px);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
+      h1 {
+        font-size: 2rem;
+        background: linear-gradient(135deg, #1976D2, #42A5F5);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      button {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .exit-btn {
+        background: linear-gradient(135deg, #EF5350, #E53935);
+      }
+
+      .role-toggle {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
+        padding: 16px 20px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
+      .form-section {
+        background: linear-gradient(135deg, #F5F9FF 0%, #E8F4FD 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        border: 2px solid rgba(33, 150, 243, 0.15);
+        transition: transform 0.2s;
+      }
+
+      .form-section:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(33, 150, 243, 0.2);
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        color: #0277BD;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+      }
+
+      input[type="text"],
+      input[type="number"] {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid rgba(33, 150, 243, 0.3);
+        border-radius: 10px;
+        font-size: 1rem;
+        background: white;
+        color: #1565C0;
+        transition: all 0.3s;
+      }
+
+      input[type="text"]:focus,
+      input[type="number"]:focus {
+        outline: none;
+        border-color: #2196F3;
+        box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+      }
+
+      .duration-inputs {
+        display: flex;
+        gap: 16px;
+        margin-top: 12px;
+      }
+
+      .duration-inputs > div {
+        flex: 1;
+      }
+
+      .duration-inputs input {
+        width: 100%;
+      }
+
+      .status-text {
+        display: block;
+        margin-top: 8px;
+        font-size: 0.85rem;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 500;
+      }
+
+      .status-text:empty {
+        display: none;
+      }
+
+      .status-ok {
+        color: #2E7D32;
+        background: rgba(76, 175, 80, 0.1);
+      }
+
+      .status-error {
+        color: #C62828;
+        background: rgba(244, 67, 54, 0.1);
+      }
+
+      hr {
+        border: none;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(33, 150, 243, 0.3), transparent);
+        margin: 30px 0;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .section-header strong {
+        font-size: 1.2rem;
+        color: #1565C0;
+      }
+
+      .checkbox-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        accent-color: #2196F3;
+      }
+
+      .milestone-row,
+      .reward-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: white;
+        border-radius: 12px;
+        margin-bottom: 12px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+        transition: all 0.2s;
+      }
+
+      .milestone-row:hover,
+      .reward-row:hover {
+        border-color: #2196F3;
+        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+      }
+
+      .milestone-label,
+      .reward-label {
+        min-width: 100px;
+        font-weight: 600;
+        color: #0277BD;
+      }
+
+      .milestone-inputs {
+        display: flex;
+        gap: 16px;
+        flex: 1;
+      }
+
+      .milestone-inputs > div {
+        flex: 1;
+      }
+
+      .milestone-inputs input {
+        width: 100%;
+      }
+
+      .rate-display {
+        min-width: 260px;
+        padding: 12px;
+        background: linear-gradient(135deg, #E1F5FE, #B3E5FC);
+        border-radius: 8px;
+        font-size: 0.9rem;
+        color: #0277BD;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+
+      .button-group button {
+        flex: 1;
+        min-width: 120px;
+      }
+
+      .graph-container {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        margin-top: 24px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
+      #payoutGraph {
+        width: 100%;
+        height: auto;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+        border-radius: 12px;
+        background: linear-gradient(135deg, #FAFBFF, #F0F7FF);
+      }
+
+      .slider-container {
+        margin-top: 20px;
+      }
+
+      .slider-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        font-size: 0.9rem;
+        color: #0277BD;
+        font-weight: 600;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        height: 8px;
+        border-radius: 5px;
+        background: linear-gradient(90deg, #BBDEFB, #90CAF9);
+        outline: none;
+        -webkit-appearance: none;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2196F3, #1976D2);
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
+      }
+
+      input[type="range"]::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2196F3, #1976D2);
+        cursor: pointer;
+        border: none;
+        box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
+      }
+
+      .payout-display {
+        margin-top: 12px;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #E1F5FE, #B3E5FC);
+        border-radius: 10px;
+        font-size: 1rem;
+        color: #0277BD;
+      }
+
+      .payout-display strong {
+        font-size: 1.2rem;
+        color: #1565C0;
+      }
+
+      .submit-section {
+        margin-top: 32px;
+        padding-top: 24px;
+        border-top: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
+      #sendForReviewButton {
+        width: 100%;
+        padding: 16px;
+        font-size: 1.1rem;
+        background: linear-gradient(135deg, #4CAF50, #45A049);
+      }
+
+      #sendForReviewButton:hover {
+        background: linear-gradient(135deg, #45A049, #3D8B40);
+      }
+
+      #sendForReviewStatus {
+        margin-top: 12px;
+        padding: 10px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+
+      small {
+        display: block;
+        font-size: 0.85rem;
+        margin-top: 8px;
+        padding: 8px 12px;
+        border-radius: 8px;
+      }
+
+      #noProgressPayText,
+      #noAonPayText {
+        color: #64B5F6;
+        background: rgba(100, 181, 246, 0.1);
+        padding: 12px;
+        border-radius: 8px;
+        font-style: italic;
+      }
+    </style>
   </head>
   <body>
-    <button id="exitButton">Exit</button>
+    <div class="container">
+      <div class="header">
+        <h1>✨ Create Your Pact</h1>
+        <button id="exitButton" class="exit-btn">← Exit</button>
+      </div>
 
-    <h1>Welcome to the pactory</h1>
+      <div class="role-toggle">
+        <span style="font-weight: 600; color: #0277BD;">Your Role:</span>
+        <span id="defaultRoleText" style="font-weight: 600; color: #1565C0;">-</span>
+        <button id="toggleRoleButton" type="button" disabled>Switch</button>
+      </div>
 
-    <p>
-      Your Role: <span id="defaultRoleText">-</span>
-      <button id="toggleRoleButton" type="button" disabled>Switch</button>
-    </p>
-
-    <label style="display: block; margin-top: 10px">
-      Pact Name
-      <input
-        id="pactName"
-        type="text"
-        maxlength="80"
-        required
-        placeholder="e.g., Nike January Campaign"
-        style="width: 320px; padding: 8px; margin-top: 6px"
-      />
-    </label>
-
-    <p>
-      <label id="counterpartyLabel" for="counterpartyInput"
-        >Counterparty address</label
-      ><br />
-      <input id="counterpartyInput" type="text" placeholder="0x..." size="44" />
-      <br />
-      <small id="counterpartyStatus"></small>
-    </p>
-
-    <p><strong>Duration</strong></p>
-
-    <div style="display: flex; gap: 12px; align-items: center">
-      <div>
-        <label for="durationDays">Days</label><br />
+      <div class="form-section">
+        <label for="pactName">Pact Name</label>
         <input
-          id="durationDays"
-          type="number"
-          min="0"
-          step="1"
-          value="0"
-          style="width: 70px"
+          id="pactName"
+          type="text"
+          maxlength="80"
+          required
+          placeholder="e.g., Nike January Campaign"
         />
       </div>
 
-      <div>
-        <label for="durationHours">Hours</label><br />
-        <input
-          id="durationHours"
-          type="number"
-          min="0"
-          max="23"
-          step="1"
-          value="0"
-          style="width: 70px"
-        />
+      <div class="form-section">
+        <label id="counterpartyLabel" for="counterpartyInput">Counterparty address</label>
+        <input id="counterpartyInput" type="text" placeholder="0x..." />
+        <small id="counterpartyStatus" class="status-text"></small>
       </div>
 
-      <div>
-        <label for="durationMinutes">Minutes</label><br />
-        <input
-          id="durationMinutes"
-          type="number"
-          min="0"
-          max="59"
-          step="1"
-          value="0"
-          style="width: 70px"
-        />
+      <div class="form-section">
+        <label><strong>Duration</strong></label>
+        <div class="duration-inputs">
+          <div>
+            <label for="durationDays" style="font-size: 0.85rem; margin-bottom: 4px;">Days</label>
+            <input id="durationDays" type="number" min="0" step="1" value="0" />
+          </div>
+          <div>
+            <label for="durationHours" style="font-size: 0.85rem; margin-bottom: 4px;">Hours</label>
+            <input id="durationHours" type="number" min="0" max="23" step="1" value="0" />
+          </div>
+          <div>
+            <label for="durationMinutes" style="font-size: 0.85rem; margin-bottom: 4px;">Minutes</label>
+            <input id="durationMinutes" type="number" min="0" max="59" step="1" value="0" />
+          </div>
+        </div>
+        <small id="durationStatus" class="status-text"></small>
       </div>
-    </div>
 
-    <small id="durationStatus"></small>
+      <hr />
 
-    <hr />
+      <div class="form-section">
+        <div class="section-header">
+          <strong>📈 Progress Pay</strong>
+          <div class="checkbox-wrapper">
+            <input id="progressPayEnabled" type="checkbox" checked />
+            <label for="progressPayEnabled" style="margin: 0; font-weight: normal;">Enable</label>
+          </div>
+        </div>
 
-    <div style="display: flex; align-items: center; gap: 10px">
-      <strong>Progress Pay</strong>
-      <label style="font-weight: normal">
-        <input id="progressPayEnabled" type="checkbox" checked />
-        Enable
-      </label>
-    </div>
+        <p id="noProgressPayText" style="display: none; margin-top: 8px">
+          There is no progress pay.
+        </p>
 
-    <p id="noProgressPayText" style="display: none; margin-top: 8px">
-      There is no progress pay.
-    </p>
+        <div id="progressPayBody">
+          <div id="progressMilestones"></div>
+          <div class="button-group">
+            <button id="addMilestoneButton" type="button">➕ Add Milestone</button>
+            <button id="deleteMilestoneButton" type="button" style="display: none">
+              ➖ Delete Milestone
+            </button>
+          </div>
+          <small id="ppStatus" class="status-text"></small>
+        </div>
+        <div class="button-group">
+          <button id="saveMilestonesButton" type="button">💾 Save</button>
+          <button id="editMilestonesButton" type="button" style="display: none">
+            ✏️ Edit
+          </button>
+        </div>
+      </div>
 
-    <div id="progressPayBody">
-      <div id="progressMilestones"></div>
-      <div style="display: flex; gap: 10px; align-items: center">
-        <button id="addMilestoneButton" type="button">Add Milestone</button>
-        <button id="deleteMilestoneButton" type="button" style="display: none">
-          Delete Milestone
+      <hr />
+
+      <div class="form-section">
+        <div class="section-header">
+          <strong>🎯 All-or-Nothing Pay</strong>
+          <div class="checkbox-wrapper">
+            <input id="aonPayEnabled" type="checkbox" checked />
+            <label for="aonPayEnabled" style="margin: 0; font-weight: normal;">Enable</label>
+          </div>
+        </div>
+
+        <p id="noAonPayText" style="display: none; margin-top: 8px">
+          There is no all-or-nothing pay.
+        </p>
+
+        <div id="aonPayBody">
+          <div id="aonRewards"></div>
+          <div class="button-group">
+            <button id="addAonRewardButton" type="button">➕ Add Reward</button>
+            <button id="deleteAonRewardButton" type="button" style="display: none">
+              ➖ Delete Reward
+            </button>
+          </div>
+          <small id="aonStatus" class="status-text"></small>
+        </div>
+        <div class="button-group">
+          <button id="saveAonRewardButton" type="button">💾 Save</button>
+          <button id="editAonRewardsButton" type="button" style="display: none">
+            ✏️ Edit
+          </button>
+        </div>
+      </div>
+
+      <hr />
+
+      <div class="graph-container">
+        <div style="font-size: 0.9rem; color: #64B5F6; margin-bottom: 12px; font-weight: 600;">
+          📊 Total payout graph (Progress + All-or-Nothing)
+        </div>
+
+        <svg
+          id="payoutGraph"
+          width="680"
+          height="220"
+        ></svg>
+
+        <div class="slider-container">
+          <div class="slider-label">
+            <span>Views: <span id="sliderViewsLabel">0</span></span>
+          </div>
+          <input
+            id="viewsSlider"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value="0"
+          />
+          <div class="payout-display">
+            Earned so far: <strong><span id="sliderPayoutLabel">$0</span></strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="submit-section">
+        <button id="sendForReviewButton" type="button">
+          ✨ Send pact for review
         </button>
-      </div>
-      <small id="ppStatus"></small>
-    </div>
-    <button id="saveMilestonesButton" type="button">Save</button>
-    <button id="editMilestonesButton" type="button" style="display: none">
-      Edit
-    </button>
-
-    <hr />
-
-    <div style="display: flex; align-items: center; gap: 10px">
-      <strong>All-or-Nothing Pay</strong>
-      <label style="font-weight: normal">
-        <input id="aonPayEnabled" type="checkbox" checked />
-        Enable
-      </label>
-    </div>
-
-    <p id="noAonPayText" style="display: none; margin-top: 8px">
-      There is no all-or-nothing pay.
-    </p>
-
-    <div id="aonPayBody">
-      <div id="aonRewards"></div>
-
-      <div style="display: flex; gap: 10px; align-items: center">
-        <button id="addAonRewardButton" type="button">Add Reward</button>
-
-        <button id="deleteAonRewardButton" type="button" style="display: none">
-          Delete Reward
-        </button>
-      </div>
-
-      <small id="aonStatus"></small>
-    </div>
-
-    <button id="saveAonRewardButton" type="button">Save</button>
-
-    <button id="editAonRewardsButton" type="button" style="display: none">
-      Edit
-    </button>
-
-    <hr />
-
-    <div style="margin-top: 12px">
-      <div style="font-size: 12px; opacity: 0.7; margin-bottom: 6px">
-        Total payout graph (Progress + All-or-Nothing)
-      </div>
-
-      <svg
-        id="payoutGraph"
-        width="680"
-        height="220"
-        style="border: 1px solid #ddd; border-radius: 10px"
-      ></svg>
-    </div>
-
-    <div style="margin-top: 10px">
-      <label
-        style="
-          display: block;
-          font-size: 12px;
-          opacity: 0.8;
-          margin-bottom: 6px;
-        "
-      >
-        Views:
-        <span id="sliderViewsLabel">0</span>
-      </label>
-
-      <input
-        id="viewsSlider"
-        type="range"
-        min="0"
-        max="100"
-        step="1"
-        value="0"
-        style="width: 680px"
-      />
-
-      <div style="margin-top: 8px; font-size: 13px">
-        Earned so far: <strong><span id="sliderPayoutLabel">$0</span></strong>
+        <small
+          id="sendForReviewStatus"
+          class="status-text"
+        ></small>
       </div>
     </div>
 
-    <div style="margin-top: 14px">
-      <button id="sendForReviewButton" type="button">
-        Send pact for review
-      </button>
-      <small
-        id="sendForReviewStatus"
-        style="display: block; margin-top: 6px"
-      ></small>
-    </div>
-
+    <script type="module">
+      import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
+      import { initMusic } from './music.js';
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          initLoadingScreen();
+          initCursorBackground();
+          initMusic();
+        });
+      } else {
+        initLoadingScreen();
+        initCursorBackground();
+        initMusic();
+      }
+    </script>
     <script type="module" src="./pactory.js"></script>
   </body>
 </html>

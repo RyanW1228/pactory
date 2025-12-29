@@ -2,24 +2,270 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Pacts</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pacts Dashboard</title>
+    <link rel="stylesheet" href="./loading-screen.css" />
+    <link rel="stylesheet" href="./fireworks.css" />
+    <link rel="stylesheet" href="./music.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+        min-height: 100vh;
+        padding: 20px;
+        color: #1565C0;
+      }
+
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow: 0 20px 60px rgba(33, 150, 243, 0.2);
+        backdrop-filter: blur(10px);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid rgba(33, 150, 243, 0.2);
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+
+      h1 {
+        font-size: 2rem;
+        background: linear-gradient(135deg, #1976D2, #42A5F5);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .header-controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .view-toggle {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
+        padding: 12px 20px;
+        border-radius: 12px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
+      .balance-display {
+        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
+        padding: 12px 20px;
+        border-radius: 12px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+        font-weight: 600;
+        color: #0277BD;
+      }
+
+      button {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .home-btn {
+        background: linear-gradient(135deg, #64B5F6, #42A5F5);
+      }
+
+      .propose-btn {
+        background: linear-gradient(135deg, #4CAF50, #45A049);
+        font-size: 1rem;
+        padding: 14px 28px;
+      }
+
+      .propose-btn:hover {
+        background: linear-gradient(135deg, #45A049, #3D8B40);
+      }
+
+      .section {
+        margin-bottom: 20px;
+        background: linear-gradient(135deg, #F5F9FF 0%, #E8F4FD 100%);
+        border-radius: 16px;
+        border: 2px solid rgba(33, 150, 243, 0.15);
+        overflow: hidden;
+        transition: all 0.3s ease;
+      }
+
+      .section:hover {
+        box-shadow: 0 8px 20px rgba(33, 150, 243, 0.2);
+      }
+
+      .section summary {
+        padding: 20px 24px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: #1565C0;
+        list-style: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
+        transition: all 0.2s;
+      }
+
+      .section summary:hover {
+        background: linear-gradient(135deg, #B3E5FC 0%, #90CAF9 100%);
+      }
+
+      .section summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .section summary::after {
+        content: '▼';
+        font-size: 0.8rem;
+        transition: transform 0.3s;
+        color: #2196F3;
+      }
+
+      .section[open] summary::after {
+        transform: rotate(180deg);
+      }
+
+      .section .list {
+        padding: 20px 24px;
+        background: white;
+      }
+
+      .pact-card {
+        padding: 20px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+        border-radius: 12px;
+        margin: 12px 0;
+        background: linear-gradient(135deg, #FAFBFF 0%, #F0F7FF 100%);
+        transition: all 0.3s ease;
+      }
+
+      .pact-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(33, 150, 243, 0.2);
+        border-color: #2196F3;
+      }
+
+      .pact-title {
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: #1565C0;
+        margin-bottom: 12px;
+      }
+
+      .pact-meta {
+        font-size: 0.9rem;
+        color: #64B5F6;
+        margin: 6px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .pact-meta strong {
+        color: #0277BD;
+      }
+
+      .pact-card button {
+        margin-top: 12px;
+        width: auto;
+        padding: 10px 20px;
+        font-size: 0.9rem;
+      }
+
+      .empty {
+        text-align: center;
+        color: #90CAF9;
+        font-style: italic;
+        padding: 40px 20px;
+        font-size: 1rem;
+      }
+
+      .count-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #42A5F5, #2196F3);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-left: 8px;
+      }
+    </style>
   </head>
   <body>
-    <button id="homeButton">Home</button>
+    <div class="container">
+      <div class="header">
+        <h1 id="dashboardTitle">Your Sponsor Pacts</h1>
+        <div class="header-controls">
+          <button id="homeButton" class="home-btn">🏠 Home</button>
+          <div class="view-toggle">
+            <span style="font-weight: 600; color: #0277BD;">View:</span>
+            <span id="currentView" style="font-weight: 600; color: #1565C0;">-</span>
+            <button id="toggleViewButton" type="button">Switch</button>
+          </div>
+          <div class="balance-display">
+            💰 MNEE: <span id="mneeBalance">-</span>
+          </div>
+        </div>
+      </div>
 
-    <h1 id="dashboardTitle">Your Sponsor Pacts</h1>
+      <div style="margin-bottom: 24px;">
+        <button id="proposePactButton" class="propose-btn">✨ Propose New Pact</button>
+      </div>
 
-    <p>
-      Current view: <span id="currentView">-</span>
-      <button id="toggleViewButton" type="button">Switch</button>
-    </p>
+      <div id="sectionsContainer"></div>
+    </div>
 
-    <p>MNEE Balance: <span id="mneeBalance">-</span></p>
-
-    <button id="proposePactButton">Propose Pact</button>
-
-    <div id="sectionsContainer"></div>
-
+    <script type="module">
+      import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
+      import { initMusic } from './music.js';
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          initLoadingScreen();
+          initCursorBackground();
+          initMusic();
+        });
+      } else {
+        initLoadingScreen();
+        initCursorBackground();
+        initMusic();
+      }
+    </script>
     <script type="module" src="./pacts-dashboard.js"></script>
   </body>
 </html>

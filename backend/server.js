@@ -5,6 +5,8 @@ import Database from "better-sqlite3";
 import { ethers } from "ethers";
 import rateLimit from "express-rate-limit";
 import "dotenv/config";
+import fetch from "node-fetch";
+
 
 const app = express();
 app.set("trust proxy", 1);
@@ -78,6 +80,20 @@ CREATE TABLE IF NOT EXISTS pacts (
 
   video_link TEXT
 );
+
+CREATE TABLE IF NOT EXISTS video_stats (
+  pact_id INTEGER PRIMARY KEY REFERENCES pacts(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,
+  video_url TEXT NOT NULL,
+
+  views INTEGER NOT NULL,
+  likes INTEGER NOT NULL,
+  comments INTEGER NOT NULL,
+
+  last_checked_at TEXT NOT NULL
+);
+
+
 
 CREATE INDEX IF NOT EXISTS idx_pacts_status ON pacts(status);
 CREATE INDEX IF NOT EXISTS idx_pacts_sponsor ON pacts(sponsor_address);
@@ -224,6 +240,55 @@ function pactEquivalent(oldPactRow, incoming) {
     sameAon
   );
 }
+
+
+async function scrapeTikTokVideo(videoUrl) {
+  const res = await fetch(
+    `https://api.apify.com/v2/acts/clockworks~tiktok-scraper/run-sync-get-dataset-items?token=${process.env.APIFY_TOKEN}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        videoUrls: [videoUrl],
+        resultsPerPage: 1,
+      }),
+    }
+  );
+
+  const data = await res.json();
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("no data returned from Apify");
+  }
+
+  const v = data[0];
+
+  return {
+    views: v.playCount ?? 0,
+    likes: v.diggCount ?? 0,
+    comments: v.commentCount ?? 0,
+  };
+}
+
+// double check math on this
+
+function calculateUnlocked(pact, views) {
+  let unlocked = 0;
+
+  const progress = JSON.parse(pact.progress_json || "[]");
+  const aon = JSON.parse(pact.aon_json || "[]");
+
+  for (const m of progress) {
+    if (views >= m.views) unlocked = Math.max(unlocked, m.payout);
+  }
+
+  for (const r of aon) {
+    if (views >= r.views) unlocked += r.payout;
+  }
+
+  return unlocked;
+}
+
+
 
 // --------------------
 // Routes
@@ -595,6 +660,65 @@ app.post("/api/pacts/:id/video-link", (req, res) => {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
 });
+
+app.post("/api/pacts/:id/sync-views", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw new Error("Invalid pact id");
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    if (!pact.video_link) {
+      throw new Error("No video link attached to pact");
+    }
+
+    const platform = detectPlatform(pact.video_link);
+
+    let stats;
+    if (platform === "tiktok") {
+      stats = await scrapeTikTok(pact.video_link);
+    } else {
+      throw new Error("Instagram not wired yet");
+    }
+
+    const now = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO video_stats (
+        pact_id, platform, video_url,
+        views, likes, comments, last_checked_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(pact_id) DO UPDATE SET
+        views=excluded.views,
+        likes=excluded.likes,
+        comments=excluded.comments,
+        last_checked_at=excluded.last_checked_at
+    `).run(
+      id,
+      platform,
+      pact.video_link,
+      stats.views,
+      stats.likes,
+      stats.comments,
+      now
+    );
+
+    const unlocked = calculateUnlocked(pact, stats.views);
+
+    res.json({
+      ok: true,
+      platform,
+      views: stats.views,
+      likes: stats.likes,
+      comments: stats.comments,
+      unlockedPayout: unlocked,
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 
 // Delete pact (only when status='created') — either party can delete
 app.delete("/api/pacts/:id/created", (req, res) => {

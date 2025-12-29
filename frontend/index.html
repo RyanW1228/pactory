@@ -2,23 +2,209 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>pact</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pactory - Welcome</title>
+    <link rel="stylesheet" href="./loading-screen.css" />
+    <link rel="stylesheet" href="./fireworks.css" />
+    <link rel="stylesheet" href="./music.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+        min-height: 100vh;
+        padding: 20px;
+        color: #1565C0;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow: 0 20px 60px rgba(33, 150, 243, 0.2);
+        backdrop-filter: blur(10px);
+      }
+
+      h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        background: linear-gradient(135deg, #1976D2, #42A5F5);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-align: center;
+      }
+
+      .subtitle {
+        text-align: center;
+        color: #64B5F6;
+        margin-bottom: 40px;
+        font-size: 1.1rem;
+      }
+
+      .card {
+        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(33, 150, 243, 0.3);
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(33, 150, 243, 0.1);
+      }
+
+      .info-row:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        font-weight: 600;
+        color: #0277BD;
+        font-size: 0.95rem;
+      }
+
+      .info-value {
+        color: #1565C0;
+        font-weight: 500;
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 0.9rem;
+      }
+
+      button {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        color: white;
+        border: none;
+        padding: 14px 28px;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        width: 100%;
+        margin-top: 10px;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      .view-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(255, 255, 255, 0.6);
+        padding: 16px;
+        border-radius: 12px;
+        margin: 20px 0;
+      }
+
+      .view-toggle button {
+        width: auto;
+        padding: 10px 20px;
+        margin: 0;
+        font-size: 0.9rem;
+      }
+
+      .badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #42A5F5, #2196F3);
+        color: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-left: 8px;
+      }
+
+      .primary-btn {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        margin-top: 20px;
+        font-size: 1.1rem;
+        padding: 16px 32px;
+      }
+
+      .secondary-btn {
+        background: linear-gradient(135deg, #64B5F6 0%, #42A5F5 100%);
+      }
+    </style>
   </head>
   <body>
-    <button id="connectButton">Connect</button>
-    <button id="logoutButton" style="display: none">Logout</button>
+    <div class="container">
+      <h1>✨ Pactory</h1>
+      <p class="subtitle">Create & manage creator-sponsor pacts</p>
 
-    <p>Address: <span id="account">Not connected</span></p>
-    <p>MNEE Balance: <span id="mneeBalance">-</span></p>
-    <p>ETH Balance: <span id="ethBalance">-</span></p>
+      <div class="card">
+        <div class="info-row">
+          <span class="info-label">Wallet Address</span>
+          <span class="info-value" id="account">Not connected</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">MNEE Balance</span>
+          <span class="info-value" id="mneeBalance">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">ETH Balance</span>
+          <span class="info-value" id="ethBalance">-</span>
+        </div>
+      </div>
 
-    <p>
-      Current view: <span id="defaultModeText">-</span>
-      <button id="toggleDefaultModeButton" disabled>Switch</button>
-    </p>
+      <div class="view-toggle">
+        <span class="info-label">Current view: <span id="defaultModeText">-</span></span>
+        <button id="toggleDefaultModeButton" class="secondary-btn" disabled>Switch</button>
+      </div>
 
-    <button id="viewPactsButton">View Pacts</button>
+      <button id="connectButton" class="primary-btn">🔗 Connect Wallet</button>
+      <button id="logoutButton" class="secondary-btn" style="display: none">Logout</button>
+      <button id="viewPactsButton" class="primary-btn">📋 View Pacts</button>
+    </div>
 
+    <script type="module">
+      import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
+      import { initMusic } from './music.js';
+      // Initialize immediately, don't wait
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          initLoadingScreen();
+          initCursorBackground();
+          initMusic();
+        });
+      } else {
+        initLoadingScreen();
+        initCursorBackground();
+        initMusic();
+      }
+    </script>
     <script type="module" src="./index.js"></script>
   </body>
 </html>

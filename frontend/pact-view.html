@@ -2,20 +2,243 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pact View</title>
+    <link rel="stylesheet" href="./loading-screen.css" />
+    <link rel="stylesheet" href="./fireworks.css" />
+    <link rel="stylesheet" href="./music.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+        min-height: 100vh;
+        padding: 20px;
+        color: #1565C0;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow: 0 20px 60px rgba(33, 150, 243, 0.2);
+        backdrop-filter: blur(10px);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
+      h1 {
+        font-size: 2rem;
+        background: linear-gradient(135deg, #1976D2, #42A5F5);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      button {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .back-btn {
+        background: linear-gradient(135deg, #64B5F6, #42A5F5);
+      }
+
+      .pact-card {
+        background: linear-gradient(135deg, #F5F9FF 0%, #E8F4FD 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        border: 2px solid rgba(33, 150, 243, 0.2);
+      }
+
+      .info-row {
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(33, 150, 243, 0.1);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .info-row:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        font-weight: 600;
+        color: #0277BD;
+        min-width: 120px;
+      }
+
+      .info-value {
+        color: #1565C0;
+        flex: 1;
+      }
+
+      .info-value a {
+        color: #2196F3;
+        text-decoration: none;
+      }
+
+      .info-value a:hover {
+        text-decoration: underline;
+      }
+
+      .payment-list {
+        margin-top: 8px;
+        padding-left: 20px;
+      }
+
+      .payment-list li {
+        margin: 6px 0;
+        color: #1565C0;
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+        flex-wrap: wrap;
+      }
+
+      .action-buttons button {
+        flex: 1;
+        min-width: 150px;
+      }
+
+      .negotiate-btn {
+        background: linear-gradient(135deg, #2196F3, #1976D2);
+      }
+
+      .accept-btn {
+        background: linear-gradient(135deg, #4CAF50, #45A049);
+      }
+
+      .accept-btn:hover {
+        background: linear-gradient(135deg, #45A049, #3D8B40);
+      }
+
+      .fund-btn {
+        background: linear-gradient(135deg, #4CAF50, #45A049);
+      }
+
+      .fund-btn:hover {
+        background: linear-gradient(135deg, #45A049, #3D8B40);
+      }
+
+      .delete-btn {
+        background: linear-gradient(135deg, #EF5350, #E53935);
+      }
+
+      .delete-btn:hover {
+        background: linear-gradient(135deg, #E53935, #C62828);
+      }
+
+      .replaced-details {
+        margin-top: 24px;
+        background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+        border-radius: 16px;
+        padding: 20px;
+        border: 2px solid rgba(255, 152, 0, 0.3);
+      }
+
+      .replaced-details summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: #E65100;
+        padding: 12px;
+        border-radius: 8px;
+        background: rgba(255, 152, 0, 0.1);
+        margin-bottom: 12px;
+      }
+
+      .replaced-details summary:hover {
+        background: rgba(255, 152, 0, 0.2);
+      }
+
+      .replaced-details summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .replaced-details summary::after {
+        content: ' ▼';
+        font-size: 0.8rem;
+      }
+
+      .replaced-details[open] summary::after {
+        content: ' ▲';
+      }
+
+      .replaced-card {
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        border: 2px solid rgba(255, 152, 0, 0.2);
+      }
+    </style>
   </head>
   <body>
-    <button id="backButton">Back</button>
-    <h1 id="title">Pact</h1>
+    <div class="container">
+      <div class="header">
+        <h1 id="title">Pact</h1>
+        <button id="backButton" class="back-btn">← Back</button>
+      </div>
 
-    <div id="content" style="margin-top: 12px"></div>
-    <details id="replacedPactDetails" style="margin-top: 16px; display: none">
-      <summary style="cursor: pointer; font-weight: 600">
-        View replaced pact
-      </summary>
-      <div id="replacedPactBody" style="margin-top: 12px"></div>
-    </details>
+      <div id="content"></div>
 
+      <details id="replacedPactDetails" class="replaced-details" style="display: none">
+        <summary>View replaced pact</summary>
+        <div id="replacedPactBody"></div>
+      </details>
+    </div>
+
+    <script type="module">
+      import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
+      import { initMusic } from './music.js';
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          initLoadingScreen();
+          initCursorBackground();
+          initMusic();
+        });
+      } else {
+        initLoadingScreen();
+        initCursorBackground();
+        initMusic();
+      }
+    </script>
     <script type="module" src="./pact-view.js"></script>
   </body>
 </html>
