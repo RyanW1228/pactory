@@ -136,9 +136,9 @@ async function getMneeBalanceAndDecimals(userAddress) {
 }
 
 function renderPayments(label, enabled, items, isProgress) {
-  if (!enabled) return `<div class="info-row"><span class="info-label">${label}:</span><span class="info-value">Disabled</span></div>`;
+  if (!enabled) return `<div><strong>${label}:</strong> Disabled</div>`;
   if (!items || items.length === 0)
-    return `<div class="info-row"><span class="info-label">${label}:</span><span class="info-value">None</span></div>`;
+    return `<div><strong>${label}:</strong> None</div>`;
 
   const rows = items
     .map((x, i) => {
@@ -150,7 +150,7 @@ function renderPayments(label, enabled, items, isProgress) {
     })
     .join("");
 
-  return `<div class="info-row"><span class="info-label">${label}:</span><ul class="payment-list info-value">${rows}</ul></div>`;
+  return `<div style="margin-top:10px;"><strong>${label}:</strong><ul>${rows}</ul></div>`;
 }
 
 // Data load
@@ -180,14 +180,14 @@ if (data.replaced_pact) {
   const rp = data.replaced_pact;
 
   replacedBody.innerHTML = `
-    <div class="replaced-card">
-      <div class="info-row"><span class="info-label">Name:</span><span class="info-value">${rp.name || "Untitled Pact"}</span></div>
-      <div class="info-row"><span class="info-label">Status:</span><span class="info-value">${rp.status}</span></div>
-      <div class="info-row"><span class="info-label">Sponsor:</span><span class="info-value">${rp.sponsor_address}</span></div>
-      <div class="info-row"><span class="info-label">Creator:</span><span class="info-value">${rp.creator_address}</span></div>
-      <div class="info-row"><span class="info-label">Duration:</span><span class="info-value">${formatDuration(
+    <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
+      <div><strong>Name:</strong> ${rp.name || "Untitled Pact"}</div>
+      <div><strong>Status:</strong> ${rp.status}</div>
+      <div><strong>Sponsor:</strong> ${rp.sponsor_address}</div>
+      <div><strong>Creator:</strong> ${rp.creator_address}</div>
+      <div><strong>Duration:</strong> ${formatDuration(
         rp.duration_seconds
-      )}</span></div>
+      )}</div>
 
       ${renderPayments(
         "Progress Pay",
@@ -215,23 +215,23 @@ titleEl.innerText = String(p.name || "").trim() ? p.name : `Pact #${p.id}`;
 const maxPayout = maxPayoutMnee(p);
 
 contentEl.innerHTML = `
-  <div class="pact-card">
-    <div class="info-row"><span class="info-label">Status:</span><span class="info-value">${prettyStatus(p.status)}</span></div>
-    <div class="info-row"><span class="info-label">Created:</span><span class="info-value">${formatEastern(p.created_at)}</span></div>
-    <div class="info-row"><span class="info-label">Sponsor:</span><span class="info-value">${prettyAddr(p.sponsor_address)}</span></div>
-    <div class="info-row"><span class="info-label">Creator:</span><span class="info-value">${prettyAddr(p.creator_address)}</span></div>
+  <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
+    <div><strong>Status:</strong> ${prettyStatus(p.status)}</div>
+    <div><strong>Created:</strong> ${formatEastern(p.created_at)}</div>
+    <div><strong>Sponsor:</strong> ${prettyAddr(p.sponsor_address)}</div>
+    <div><strong>Creator:</strong> ${prettyAddr(p.creator_address)}</div>
 
-    <div class="info-row"><span class="info-label">Max payout:</span><span class="info-value">$${
+    <div><strong>Max payout:</strong> $${
       Number.isFinite(maxPayout) ? maxPayout.toFixed(2) : "-"
-    }</span></div>
+    }</div>
 
-    <div class="info-row"><span class="info-label">Video Link:</span><span class="info-value">${
+    <div><strong>Video Link:</strong> ${
       String(p.video_link || "").trim()
         ? `<a href="${p.video_link}" target="_blank" rel="noopener noreferrer">${p.video_link}</a>`
         : `<span style="opacity:0.7;">(not set)</span>`
-    }</span></div>
+    }</div>
 
-    <div class="info-row"><span class="info-label">Duration:</span><span class="info-value">${formatDuration(p.duration_seconds)}</span></div>
+    <div><strong>Duration:</strong> ${formatDuration(p.duration_seconds)}</div>
 
     ${renderPayments(
       "Progress Pay",
@@ -259,7 +259,14 @@ if (canInputVideoLink) {
   const videoBtn = document.createElement("button");
   videoBtn.type = "button";
   videoBtn.innerText = "Input Video Link";
-  videoBtn.className = "negotiate-btn";
+
+  videoBtn.style.marginTop = "10px";
+  videoBtn.style.background = "#2c3e50";
+  videoBtn.style.color = "white";
+  videoBtn.style.padding = "8px 14px";
+  videoBtn.style.borderRadius = "8px";
+  videoBtn.style.border = "none";
+  videoBtn.style.cursor = "pointer";
 
   videoBtn.onclick = async () => {
     const current = String(p.video_link || "").trim();
@@ -300,10 +307,7 @@ if (canInputVideoLink) {
     }
   };
 
-  const actionButtons = document.createElement("div");
-  actionButtons.className = "action-buttons";
-  actionButtons.appendChild(videoBtn);
-  contentEl.appendChild(actionButtons);
+  contentEl.appendChild(videoBtn);
 }
 
 // --- Approve + Fund button (ONLY sponsor, ONLY created view, ONLY when video_link is set) ---
@@ -317,7 +321,15 @@ if (canApproveAndFund) {
   const fundBtn = document.createElement("button");
   fundBtn.type = "button";
   fundBtn.innerText = "Approve and Fund";
-  fundBtn.className = "fund-btn";
+
+  fundBtn.style.marginTop = "10px";
+  fundBtn.style.marginLeft = "10px";
+  fundBtn.style.background = "#1f7a1f";
+  fundBtn.style.color = "white";
+  fundBtn.style.padding = "8px 14px";
+  fundBtn.style.borderRadius = "8px";
+  fundBtn.style.border = "none";
+  fundBtn.style.cursor = "pointer";
 
   fundBtn.onclick = async () => {
     // Must be MetaMask + sponsor
@@ -463,12 +475,7 @@ if (canApproveAndFund) {
     }
   };
 
-  if (!contentEl.querySelector(".action-buttons")) {
-    const actionButtons = document.createElement("div");
-    actionButtons.className = "action-buttons";
-    contentEl.appendChild(actionButtons);
-  }
-  contentEl.querySelector(".action-buttons").appendChild(fundBtn);
+  contentEl.appendChild(fundBtn);
 }
 
 // --- Negotiate button (only counterparty, only awaiting review) ---
@@ -486,7 +493,14 @@ if (canNegotiate) {
   const negotiateBtn = document.createElement("button");
   negotiateBtn.type = "button";
   negotiateBtn.innerText = "Negotiate Pact";
-  negotiateBtn.className = "negotiate-btn";
+
+  negotiateBtn.style.marginTop = "10px";
+  negotiateBtn.style.background = "#2c3e50";
+  negotiateBtn.style.color = "white";
+  negotiateBtn.style.padding = "8px 14px";
+  negotiateBtn.style.borderRadius = "8px";
+  negotiateBtn.style.border = "none";
+  negotiateBtn.style.cursor = "pointer";
 
   negotiateBtn.onclick = () => {
     window.location.href = `./pactory.html?mode=negotiate&id=${encodeURIComponent(
@@ -494,19 +508,22 @@ if (canNegotiate) {
     )}`;
   };
 
-  if (!contentEl.querySelector(".action-buttons")) {
-    const actionButtons = document.createElement("div");
-    actionButtons.className = "action-buttons";
-    contentEl.appendChild(actionButtons);
-  }
-  contentEl.querySelector(".action-buttons").appendChild(negotiateBtn);
+  contentEl.appendChild(negotiateBtn);
 }
 
 if (canAccept) {
   const acceptBtn = document.createElement("button");
   acceptBtn.type = "button";
   acceptBtn.innerText = "Accept Pact";
-  acceptBtn.className = "accept-btn";
+
+  acceptBtn.style.marginTop = "10px";
+  acceptBtn.style.marginLeft = "10px";
+  acceptBtn.style.background = "#1f7a1f";
+  acceptBtn.style.color = "white";
+  acceptBtn.style.padding = "8px 14px";
+  acceptBtn.style.borderRadius = "8px";
+  acceptBtn.style.border = "none";
+  acceptBtn.style.cursor = "pointer";
 
   acceptBtn.onclick = async () => {
     const ok = confirm("Accept this pact? This will mark it as Created.");
@@ -545,12 +562,7 @@ if (canAccept) {
     }
   };
 
-  if (!contentEl.querySelector(".action-buttons")) {
-    const actionButtons = document.createElement("div");
-    actionButtons.className = "action-buttons";
-    contentEl.appendChild(actionButtons);
-  }
-  contentEl.querySelector(".action-buttons").appendChild(acceptBtn);
+  contentEl.appendChild(acceptBtn);
 }
 
 // Action button
@@ -563,7 +575,14 @@ if (actionLabel) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.innerText = actionLabel;
-  btn.className = "delete-btn";
+
+  btn.style.marginTop = "16px";
+  btn.style.background = "#c0392b";
+  btn.style.color = "white";
+  btn.style.padding = "8px 14px";
+  btn.style.borderRadius = "8px";
+  btn.style.border = "none";
+  btn.style.cursor = "pointer";
 
   btn.onclick = async () => {
     const msg =
@@ -610,10 +629,5 @@ if (actionLabel) {
     }
   };
 
-  if (!contentEl.querySelector(".action-buttons")) {
-    const actionButtons = document.createElement("div");
-    actionButtons.className = "action-buttons";
-    contentEl.appendChild(actionButtons);
-  }
-  contentEl.querySelector(".action-buttons").appendChild(btn);
+  contentEl.appendChild(btn);
 }
