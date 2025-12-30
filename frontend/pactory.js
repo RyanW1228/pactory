@@ -669,8 +669,11 @@ function makeNiceTicks(maxVal, target = 6) {
 }
 
 function formatMoneyTick(v) {
-  if (v >= 1000) return `$${Math.round(v).toLocaleString()}`;
-  return `$${v.toFixed(0)}`;
+  // Always show 2 decimal places
+  if (v >= 1000) {
+    return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `$${v.toFixed(2)}`;
 }
 
 function renderPayoutGraph() {
@@ -700,27 +703,17 @@ function renderPayoutGraph() {
     <text x="${padL}" y="${
     h - 10
   }" font-size="12" fill="#0277BD" font-weight="600">views</text>
-    <text x="10" y="${
-      padT + 12
-    }" font-size="12" fill="#0277BD" font-weight="600">payout</text>
+    <text x="6" y="${
+      padT + innerH / 2
+    }" font-size="12" fill="#0277BD" font-weight="600" transform="rotate(-90, 6, ${padT + innerH / 2})" text-anchor="middle">payout</text>
   `;
 
   const keys = collectKeyViewsWithInfinity();
 
   const hasAnyThreshold = keys.some((k) => k !== 0 && k !== X_INF);
   if (!hasAnyThreshold) {
-    payoutGraph.innerHTML += `
-      <text x="${w / 2}" y="${
-      h / 2
-    }" font-size="14" fill="#64B5F6" text-anchor="middle" font-weight="500" opacity="0.7">
-        Enter milestone/reward view thresholds to see the graph
-      </text>
-      <text x="${w / 2}" y="${
-      h / 2 + 20
-    }" font-size="11" fill="#90CAF9" text-anchor="middle" opacity="0.6">
-        📊 Your payout visualization will appear here
-      </text>
-    `;
+    // Empty graph - no message needed, info is in the help tooltip
+  }
 
     const axisY = padT + innerH;
     const x0 = padL;

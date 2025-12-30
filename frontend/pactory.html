@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pactory - Create Pact</title>
+    <link rel="icon" type="image/gif" href="./assets/images/pengu-dancy.gif" />
     <link rel="stylesheet" href="./loading-screen.css" />
     <link rel="stylesheet" href="./fireworks.css" />
     <link rel="stylesheet" href="./music.css" />
@@ -334,6 +335,29 @@
         box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
       }
 
+      .help-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #E3F2FD;
+        color: #1976D2;
+        font-size: 0.75rem;
+        font-weight: 700;
+        cursor: help;
+        border: 1px solid rgba(33, 150, 243, 0.2);
+        transition: all 0.2s ease;
+        line-height: 1;
+      }
+
+      .help-icon:hover {
+        background: #BBDEFB;
+        border-color: rgba(33, 150, 243, 0.4);
+        transform: scale(1.1);
+      }
+
       #payoutGraph {
         width: 100%;
         height: auto;
@@ -569,8 +593,9 @@
     <hr />
 
       <div class="graph-container">
-        <div style="font-size: 0.875rem; color: #37474F; margin-bottom: 12px; font-weight: 600;">
-        Total payout graph (Progress + All-or-Nothing)
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 0.875rem; color: #37474F; margin-bottom: 12px; font-weight: 600;">
+          <span>Total Payout Graph</span>
+          <span class="help-icon" title="Shows the combined payout from Progress Pay milestones and All-or-Nothing Pay rewards. Add milestone and reward view thresholds above to visualize your payout curve.">?</span>
       </div>
 
       <svg
