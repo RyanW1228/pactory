@@ -9,6 +9,7 @@ import "dotenv/config";
 const app = express();
 app.set("trust proxy", 1);
 
+//shivers
 // Check for VERIFIER_PRIVATE_KEY
 const privateKey = process.env.VERIFIER_PRIVATE_KEY;
 if (!privateKey || privateKey === "[ REDACTED ]" || privateKey.trim() === "") {
