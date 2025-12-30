@@ -100,6 +100,10 @@ export function initSecondaryLoadingScreen() {
   // Hide content immediately
   hideContent();
 
+  // Track loading start time for minimum display duration
+  const loadStartTime = Date.now();
+  const MIN_DISPLAY_TIME = 1000; // 1 second minimum
+
   // Create secondary loader
   const createLoader = () => {
     if (document.getElementById("secondary-loading-screen")) return;
@@ -160,31 +164,36 @@ export function initSecondaryLoadingScreen() {
     document.addEventListener("DOMContentLoaded", createLoader, { once: true });
   }
 
-  // Hide secondary loader when page is fully loaded
+  // Hide secondary loader when page is fully loaded (with minimum display time)
   const hideSecondaryLoader = () => {
-    const loader = document.getElementById("secondary-loading-screen");
-    if (loader) {
-      loader.style.opacity = "0";
-      setTimeout(() => {
-        if (loader.parentElement) {
-          loader.remove();
-        }
-        // Reveal content
+    const elapsedTime = Date.now() - loadStartTime;
+    const remainingTime = Math.max(0, MIN_DISPLAY_TIME - elapsedTime);
+    
+    setTimeout(() => {
+      const loader = document.getElementById("secondary-loading-screen");
+      if (loader) {
+        loader.style.opacity = "0";
+        setTimeout(() => {
+          if (loader.parentElement) {
+            loader.remove();
+          }
+          // Reveal content
+          showContent();
+        }, 300);
+      } else {
+        // If loader wasn't found, just reveal content
         showContent();
-      }, 300);
-    } else {
-      // If loader wasn't found, just reveal content
-      showContent();
-    }
+      }
+    }, remainingTime);
   };
 
   // Wait for full page load
   if (document.readyState === "complete") {
-    // Page already loaded - hide immediately
-    setTimeout(hideSecondaryLoader, 100);
+    // Page already loaded - but still respect minimum time
+    hideSecondaryLoader();
   } else {
     window.addEventListener("load", hideSecondaryLoader, { once: true });
-    // Fallback - hide after a reasonable time
+    // Fallback - hide after a reasonable time (but still respect minimum)
     setTimeout(hideSecondaryLoader, 3000);
   }
 }

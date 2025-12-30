@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pactory - Welcome</title>
-    <link rel="icon" type="image/gif" href="./assets/images/pengu-dancy.gif" />
+    <link rel="icon" type="image/png" href="./assets/images/pengu-favicon.png" />
     <link rel="stylesheet" href="./loading-screen.css" />
     <link rel="stylesheet" href="./fireworks.css" />
     <link rel="stylesheet" href="./music.css" />
@@ -166,11 +166,166 @@
         border: 1px solid rgba(33, 150, 243, 0.1);
       }
 
-      .view-toggle button {
-        width: auto;
-        padding: 8px 16px;
-        margin: 0;
-        font-size: 0.875rem;
+      /* Toggle Switch Styles */
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 56px;
+        height: 28px;
+        margin-left: auto;
+      }
+
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+      }
+
+      .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #BBDEFB;
+        transition: 0.3s;
+        border-radius: 28px;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 22px;
+        width: 22px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .toggle-switch input:checked + .toggle-slider {
+        background-color: #1976D2;
+      }
+
+      .toggle-switch input:checked + .toggle-slider:before {
+        transform: translateX(28px);
+      }
+
+      .toggle-switch input:disabled + .toggle-slider {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .toggle-switch input:focus + .toggle-slider {
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
+      }
+
+      /* Confirmation Modal */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.2s ease-out;
+      }
+
+      .modal-overlay.show {
+        display: flex;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .modal-content {
+        background: white;
+        border-radius: 16px;
+        padding: 32px;
+        max-width: 480px;
+        width: 90%;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        animation: slideUp 0.3s ease-out;
+        position: relative;
+      }
+
+      @keyframes slideUp {
+        from {
+          transform: translateY(20px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      .modal-content h3 {
+        margin: 0 0 16px 0;
+        font-size: 1.5rem;
+        color: #1E3A5F;
+        font-weight: 700;
+      }
+
+      .modal-content p {
+        margin: 0 0 24px 0;
+        color: #546E7A;
+        line-height: 1.6;
+        font-size: 1rem;
+      }
+
+      .modal-buttons {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+
+      .modal-btn {
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+        font-size: 0.9375rem;
+      }
+
+      .modal-btn-cancel {
+        background: #E3F2FD;
+        color: #1976D2;
+      }
+
+      .modal-btn-cancel:hover {
+        background: #BBDEFB;
+      }
+
+      .modal-btn-confirm {
+        background: #1976D2;
+        color: white;
+      }
+
+      .modal-btn-confirm:hover {
+        background: #1565C0;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.25);
       }
 
       .badge {
@@ -229,9 +384,10 @@
         <span class="info-label"
           >Current view: <span id="defaultModeText">-</span></span
         >
-        <button id="toggleDefaultModeButton" class="secondary-btn" disabled>
-          Switch
-        </button>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleDefaultModeButton" disabled>
+          <span class="toggle-slider"></span>
+        </label>
       </div>
 
       <button id="connectButton" class="primary-btn">Connect Wallet</button>
@@ -266,6 +422,17 @@
         initMusic();
       }
     </script>
+    <!-- Confirmation Modal -->
+    <div id="modeSwitchModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Switch View Mode?</h3>
+        <p id="modeSwitchMessage">Are you sure you want to switch from <strong id="currentModeText">Sponsor</strong> to <strong id="nextModeText">Creator</strong> view?</p>
+        <div class="modal-buttons">
+          <button class="modal-btn modal-btn-cancel" id="modalCancelBtn">Cancel</button>
+          <button class="modal-btn modal-btn-confirm" id="modalConfirmBtn">Switch</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="./index.js"></script>
   </body>
 </html>

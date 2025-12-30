@@ -19,7 +19,7 @@ const mneeBalanceSpan = document.getElementById("mneeBalance");
 const defaultModeText = document.getElementById("defaultModeText");
 const toggleDefaultModeButton = document.getElementById(
   "toggleDefaultModeButton"
-);
+); // Now a checkbox input
 
 // ABI (minimal)
 const ERC20_ABI = [
@@ -43,6 +43,8 @@ function renderDefaultModeUI(address) {
   const mode = getDefaultMode(address);
   defaultModeText.innerText = mode === "sponsor" ? "Sponsor" : "Creator";
   toggleDefaultModeButton.disabled = false;
+  // Update toggle state to match current mode (creator = checked, sponsor = unchecked)
+  toggleDefaultModeButton.checked = mode === "creator";
 }
 
 async function showBalances(provider, address) {
@@ -162,14 +164,130 @@ logoutButton.onclick = () => {
   toggleDefaultModeButton.disabled = true;
 };
 
-toggleDefaultModeButton.onclick = () => {
+// Confirmation Modal Elements (will be available after DOM loads)
+let modeSwitchModal, modalCancelBtn, modalConfirmBtn, currentModeText, nextModeText;
+
+// Initialize modal elements when DOM is ready
+function initModeSwitchModal() {
+  modeSwitchModal = document.getElementById("modeSwitchModal");
+  modalCancelBtn = document.getElementById("modalCancelBtn");
+  modalConfirmBtn = document.getElementById("modalConfirmBtn");
+  currentModeText = document.getElementById("currentModeText");
+  nextModeText = document.getElementById("nextModeText");
+  
+  if (!modeSwitchModal || !modalCancelBtn || !modalConfirmBtn) {
+    console.warn("Mode switch modal elements not found");
+    return;
+  }
+  
+  // Close modal on cancel or overlay click
+  modalCancelBtn.onclick = () => {
+    hideModeSwitchModal();
+    // Reset toggle to previous state
+    const addr = localStorage.getItem("address");
+    if (!addr) return;
+    const current = getDefaultMode(addr);
+    toggleDefaultModeButton.checked = current === "creator";
+  };
+
+  modeSwitchModal.onclick = (e) => {
+    if (e.target === modeSwitchModal) {
+      hideModeSwitchModal();
+      // Reset toggle to previous state
+      const addr = localStorage.getItem("address");
+      if (!addr) return;
+      const current = getDefaultMode(addr);
+      toggleDefaultModeButton.checked = current === "creator";
+    }
+  };
+
+  // Confirm mode switch
+  modalConfirmBtn.onclick = () => {
+    const addr = localStorage.getItem("address");
+    if (!addr) return;
+
+    const current = getDefaultMode(addr);
+    const next = current === "sponsor" ? "creator" : "sponsor";
+    setDefaultMode(addr, next);
+    renderDefaultModeUI(addr);
+    hideModeSwitchModal();
+  };
+}
+
+// Show confirmation modal
+function showModeSwitchModal(currentMode, nextMode) {
+  // Ensure modal is initialized
+  if (!modeSwitchModal || !currentModeText || !nextModeText) {
+    // Try to initialize if not already done
+    initModeSwitchModal();
+    // Check again
+    if (!modeSwitchModal || !currentModeText || !nextModeText) {
+      console.error("Modal elements not found. Cannot show confirmation.");
+      // Fallback: just switch without confirmation
+      const addr = localStorage.getItem("address");
+      if (!addr) return;
+      const current = getDefaultMode(addr);
+      const next = current === "sponsor" ? "creator" : "sponsor";
+      setDefaultMode(addr, next);
+      renderDefaultModeUI(addr);
+      return;
+    }
+  }
+  currentModeText.textContent = currentMode === "sponsor" ? "Sponsor" : "Creator";
+  nextModeText.textContent = nextMode === "sponsor" ? "Sponsor" : "Creator";
+  modeSwitchModal.classList.add("show");
+  // Force display in case CSS isn't working
+  modeSwitchModal.style.display = "flex";
+  console.log("Modal shown:", modeSwitchModal.classList.contains("show"));
+}
+
+// Hide confirmation modal
+function hideModeSwitchModal() {
+  if (modeSwitchModal) {
+    modeSwitchModal.classList.remove("show");
+    modeSwitchModal.style.display = "none";
+  }
+}
+
+// Initialize modal when DOM is ready
+// Use a function that waits for the modal to exist
+function ensureModalInitialized() {
+  if (!modeSwitchModal || !modalCancelBtn || !modalConfirmBtn) {
+    initModeSwitchModal();
+    // If still not found, try again after a short delay
+    if (!modeSwitchModal || !modalCancelBtn || !modalConfirmBtn) {
+      setTimeout(ensureModalInitialized, 100);
+    }
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(ensureModalInitialized, 0);
+  });
+} else {
+  // DOM already loaded, initialize with a small delay to ensure HTML is parsed
+  setTimeout(ensureModalInitialized, 100);
+}
+
+// Toggle switch handler
+toggleDefaultModeButton.onchange = () => {
   const addr = localStorage.getItem("address");
-  if (!addr) return;
+  if (!addr) {
+    console.warn("Address not set, cannot switch mode");
+    const current = getDefaultMode(addr || "");
+    toggleDefaultModeButton.checked = current === "creator";
+    return;
+  }
 
   const current = getDefaultMode(addr);
   const next = current === "sponsor" ? "creator" : "sponsor";
-  setDefaultMode(addr, next);
-  renderDefaultModeUI(addr);
+  
+  // Show confirmation modal
+  showModeSwitchModal(current, next);
+  
+  // Don't update the toggle state yet - wait for confirmation
+  // The toggle will be reset if user cancels
 };
 
 // Init

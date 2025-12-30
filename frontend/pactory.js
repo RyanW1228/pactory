@@ -15,7 +15,7 @@ let provider, signer, escrow, mnee;
 const exitButton = document.getElementById("exitButton");
 
 const defaultRoleText = document.getElementById("defaultRoleText");
-const toggleRoleButton = document.getElementById("toggleRoleButton");
+const toggleRoleButton = document.getElementById("toggleRoleButton"); // Now a checkbox input
 const fundPactTestButton = document.getElementById("fundPactTestButton");
 
 const counterpartyLabel = document.getElementById("counterpartyLabel");
@@ -135,6 +135,8 @@ function renderRole() {
   const role = getRole(address);
   defaultRoleText.innerText = role === "sponsor" ? "Sponsor" : "Creator";
   toggleRoleButton.disabled = false;
+  // Update toggle state to match current role (creator = checked, sponsor = unchecked)
+  toggleRoleButton.checked = role === "creator";
 
   counterpartyLabel.innerText =
     role === "sponsor" ? "Creator address" : "Sponsor address";
@@ -198,7 +200,7 @@ async function loadNegotiatePactOrThrow(id) {
   validateCounterparty();
 
   // --- view-only fields in negotiate mode ---
-  toggleRoleButton.disabled = true; // role can't change
+  toggleRoleButton.disabled = true; // role can't change (checkbox disabled)
   setViewOnly(pactNameInput, true); // pact name can't change
   setViewOnly(counterpartyInput, false);
   counterpartyInput.readOnly = true; // keep value, but user can't edit
@@ -713,8 +715,6 @@ function renderPayoutGraph() {
   const hasAnyThreshold = keys.some((k) => k !== 0 && k !== X_INF);
   if (!hasAnyThreshold) {
     // Empty graph - no message needed, info is in the help tooltip
-  }
-
     const axisY = padT + innerH;
     const x0 = padL;
     const xInf = padL + innerW;
@@ -734,6 +734,8 @@ function renderPayoutGraph() {
       axisY + 20
     }" font-size="10" fill="#666" text-anchor="middle">∞</text>
     `;
+    syncSliderBounds();
+    updateSliderReadout();
     return;
   }
 
@@ -999,7 +1001,12 @@ function updateSliderReadout() {
 function validatePactName() {
   if (!pactNameInput) return true; // if missing in DOM, don't hard-crash
   const name = String(pactNameInput.value || "").trim();
-  return name.length > 0;
+  const isValid = name.length > 0 && name.length <= 80;
+  const checkEl = document.getElementById("pactNameCheck");
+  if (checkEl) {
+    checkEl.style.display = isValid ? "inline-flex" : "none";
+  }
+  return isValid;
 }
 
 // Validation
@@ -1007,9 +1014,11 @@ function validateCounterparty() {
   const value = counterpartyInput.value.trim();
   const role = getRole(address);
   const otherParty = role === "sponsor" ? "Creator" : "Sponsor";
-
+  const counterpartyCheckEl = document.getElementById("counterpartyCheck");
+  
   if (!value) {
     counterpartyStatus.innerText = "";
+    if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
     return false;
   }
 
@@ -1017,16 +1026,20 @@ function validateCounterparty() {
     counterpartyStatus.innerText = `Invalid ${
       role === "sponsor" ? "Creator" : "Sponsor"
     } address`;
-
+    if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
     return false;
   }
 
   if (value.toLowerCase() === address.toLowerCase()) {
     counterpartyStatus.innerText = `${otherParty} cannot be your own address`;
+    if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
     return false;
   }
 
   counterpartyStatus.innerText = `✓ Valid ${otherParty} address`;
+  if (counterpartyCheckEl) {
+    counterpartyCheckEl.style.display = "inline-flex";
+  }
   return true;
 }
 
@@ -1034,33 +1047,42 @@ function validateDuration() {
   const d = Number(durationDays.value);
   const h = Number(durationHours.value);
   const m = Number(durationMinutes.value);
+  const durationCheckEl = document.getElementById("durationCheck");
 
   if (![d, h, m].every(Number.isInteger)) {
     durationStatus.innerText = "Duration values must be integers";
+    if (durationCheckEl) durationCheckEl.style.display = "none";
     return false;
   }
 
   if (d < 0 || h < 0 || m < 0) {
     durationStatus.innerText = "Duration values cannot be negative";
+    if (durationCheckEl) durationCheckEl.style.display = "none";
     return false;
   }
 
   if (h > 23) {
     durationStatus.innerText = "Hours must be between 0 and 23";
+    if (durationCheckEl) durationCheckEl.style.display = "none";
     return false;
   }
 
   if (m > 59) {
     durationStatus.innerText = "Minutes must be between 0 and 59";
+    if (durationCheckEl) durationCheckEl.style.display = "none";
     return false;
   }
 
   if (d === 0 && h === 0 && m === 0) {
     durationStatus.innerText = "Duration must be greater than 0";
+    if (durationCheckEl) durationCheckEl.style.display = "none";
     return false;
   }
 
   durationStatus.innerText = "✓ Valid duration";
+  if (durationCheckEl) {
+    durationCheckEl.style.display = "inline-flex";
+  }
   return true;
 }
 
@@ -1337,44 +1359,151 @@ async function initContracts() {
   mnee = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
 }
 
-// Handlers
-toggleRoleButton.onclick = () => {
+// Confirmation Modal Elements (will be available after DOM loads)
+let roleSwitchModal, modalCancelBtn, modalConfirmBtn, currentRoleText, nextRoleText;
+
+// Initialize modal elements when DOM is ready
+function initRoleSwitchModal() {
+  roleSwitchModal = document.getElementById("roleSwitchModal");
+  modalCancelBtn = document.getElementById("modalCancelBtn");
+  modalConfirmBtn = document.getElementById("modalConfirmBtn");
+  currentRoleText = document.getElementById("currentRoleText");
+  nextRoleText = document.getElementById("nextRoleText");
+  
+  if (!roleSwitchModal || !modalCancelBtn || !modalConfirmBtn) {
+    console.warn("Role switch modal elements not found");
+    return;
+  }
+  
+  // Close modal on cancel or overlay click
+  modalCancelBtn.onclick = () => {
+    hideRoleSwitchModal();
+    // Reset toggle to previous state
+    const cur = getRole(address);
+    toggleRoleButton.checked = cur === "creator";
+  };
+
+  roleSwitchModal.onclick = (e) => {
+    if (e.target === roleSwitchModal) {
+      hideRoleSwitchModal();
+      // Reset toggle to previous state
+      const cur = getRole(address);
+      toggleRoleButton.checked = cur === "creator";
+    }
+  };
+
+  // Confirm role switch
+  modalConfirmBtn.onclick = () => {
+    const cur = getRole(address);
+    const next = cur === "sponsor" ? "creator" : "sponsor";
+    setRole(address, next);
+    renderRole();
+    hideRoleSwitchModal();
+
+    counterpartyInput.value = "";
+    counterpartyStatus.innerText = "";
+
+    durationDays.value = 0;
+    durationHours.value = 0;
+    durationMinutes.value = 0;
+    durationStatus.innerText = "";
+
+    progressPayEnabled.checked = true;
+    noProgressPayText.style.display = "none";
+    progressPayBody.style.display = "block";
+
+    progressMilestones = [{ views: "", payout: "" }];
+    ppStatus.innerText = "";
+    milestonesLocked = false;
+    renderProgressMilestones();
+    updateDeleteMilestoneVisibility();
+
+    aonPayEnabled.checked = true;
+    noAonPayText.style.display = "none";
+    aonPayBody.style.display = "block";
+
+    aonRewards = [{ views: "", payout: "" }];
+    aonStatus.innerText = "";
+    aonRewardsLocked = false;
+    renderAonRewards();
+    updateAonRewardControlsVisibility();
+
+    syncSliderBounds();
+    updateSliderReadout();
+    renderPayoutGraph();
+  };
+}
+
+// Show confirmation modal
+function showRoleSwitchModal(currentRole, nextRole) {
+  // Ensure modal is initialized
+  if (!roleSwitchModal || !currentRoleText || !nextRoleText) {
+    // Try to initialize if not already done
+    initRoleSwitchModal();
+    // Check again
+    if (!roleSwitchModal || !currentRoleText || !nextRoleText) {
+      console.error("Modal elements not found. Cannot show confirmation.");
+      // Fallback: just switch without confirmation
+      const cur = getRole(address);
+      const next = cur === "sponsor" ? "creator" : "sponsor";
+      setRole(address, next);
+      renderRole();
+      return;
+    }
+  }
+  currentRoleText.textContent = currentRole === "sponsor" ? "Sponsor" : "Creator";
+  nextRoleText.textContent = nextRole === "sponsor" ? "Sponsor" : "Creator";
+  roleSwitchModal.classList.add("show");
+  // Force display in case CSS isn't working
+  roleSwitchModal.style.display = "flex";
+  console.log("Modal shown:", roleSwitchModal.classList.contains("show"));
+}
+
+// Hide confirmation modal
+function hideRoleSwitchModal() {
+  if (roleSwitchModal) {
+    roleSwitchModal.classList.remove("show");
+    roleSwitchModal.style.display = "none";
+  }
+}
+
+// Initialize modal when DOM is ready
+// Use a function that waits for the modal to exist
+function ensureModalInitialized() {
+  if (!roleSwitchModal || !modalCancelBtn || !modalConfirmBtn) {
+    initRoleSwitchModal();
+    // If still not found, try again after a short delay
+    if (!roleSwitchModal || !modalCancelBtn || !modalConfirmBtn) {
+      setTimeout(ensureModalInitialized, 100);
+    }
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(ensureModalInitialized, 0);
+  });
+} else {
+  // DOM already loaded, initialize with a small delay to ensure HTML is parsed
+  setTimeout(ensureModalInitialized, 100);
+}
+
+// Toggle switch handler
+toggleRoleButton.onchange = (e) => {
+  if (!address) {
+    console.warn("Address not set, cannot switch role");
+    toggleRoleButton.checked = getRole(address) === "creator";
+    return;
+  }
+  
   const cur = getRole(address);
   const next = cur === "sponsor" ? "creator" : "sponsor";
-  setRole(address, next);
-  renderRole();
-
-  counterpartyInput.value = "";
-  counterpartyStatus.innerText = "";
-
-  durationDays.value = 0;
-  durationHours.value = 0;
-  durationMinutes.value = 0;
-  durationStatus.innerText = "";
-
-  progressPayEnabled.checked = true;
-  noProgressPayText.style.display = "none";
-  progressPayBody.style.display = "block";
-
-  progressMilestones = [{ views: "", payout: "" }];
-  ppStatus.innerText = "";
-  milestonesLocked = false;
-  renderProgressMilestones();
-  updateDeleteMilestoneVisibility();
-
-  aonPayEnabled.checked = true;
-  noAonPayText.style.display = "none";
-  aonPayBody.style.display = "block";
-
-  aonRewards = [{ views: "", payout: "" }];
-  aonStatus.innerText = "";
-  aonRewardsLocked = false;
-  renderAonRewards();
-  updateAonRewardControlsVisibility();
-
-  syncSliderBounds();
-  updateSliderReadout();
-  renderPayoutGraph();
+  
+  // Show confirmation modal
+  showRoleSwitchModal(cur, next);
+  
+  // Don't update the toggle state yet - wait for confirmation
+  // The toggle will be reset if user cancels
 };
 
 async function fundPactOnChain(pactId, amountUsd) {
@@ -1402,6 +1531,11 @@ counterpartyInput.addEventListener("input", validateCounterparty);
 [durationDays, durationHours, durationMinutes].forEach((el) =>
   el.addEventListener("input", validateDuration)
 );
+
+// Validate pact name on input
+if (pactNameInput) {
+  pactNameInput.addEventListener("input", validatePactName);
+}
 
 progressMilestonesEl.addEventListener("input", (e) => {
   const idx = Number(e.target.dataset.index);
