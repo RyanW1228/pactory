@@ -63,6 +63,132 @@ export function initLoadingScreen() {
   }
 }
 
+// Secondary loading screen - shows while content loads (every page load)
+export function initSecondaryLoadingScreen() {
+  // Don't show if first-visit loading screen is showing
+  const hasVisited = localStorage.getItem("pactory-has-visited");
+  if (!hasVisited) {
+    // First visit - main loading screen will handle it
+    return;
+  }
+
+  // Hide content initially to prevent flash
+  const hideContent = () => {
+    const containers = document.querySelectorAll(".container");
+    containers.forEach(container => {
+      if (container) {
+        container.style.visibility = "hidden";
+        container.style.opacity = "0";
+      }
+    });
+  };
+
+  // Show content
+  const showContent = () => {
+    if (document.body) {
+      document.body.classList.add("content-loaded");
+    }
+    const containers = document.querySelectorAll(".container");
+    containers.forEach(container => {
+      if (container) {
+        container.style.visibility = "visible";
+        container.style.opacity = "1";
+      }
+    });
+  };
+
+  // Hide content immediately
+  hideContent();
+
+  // Create secondary loader
+  const createLoader = () => {
+    if (document.getElementById("secondary-loading-screen")) return;
+
+    const secondaryLoader = document.createElement("div");
+    secondaryLoader.id = "secondary-loading-screen";
+    secondaryLoader.innerHTML = `
+      <div class="loader-content">
+        <div class="penguin-container-secondary">
+          <img src="./assets/images/pengu-dancy.gif" class="penguin-gif-secondary" alt="Dancing Penguin" />
+        </div>
+        <div class="loader-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    `;
+
+    if (document.body) {
+      document.body.insertBefore(secondaryLoader, document.body.firstChild);
+    } else {
+      // Use inline script to insert immediately
+      const script = document.createElement("script");
+      script.textContent = `
+        (function() {
+          if (document.getElementById('secondary-loading-screen')) return;
+          const div = document.createElement('div');
+          div.id = 'secondary-loading-screen';
+          div.innerHTML = \`
+            <div class="loader-content">
+              <div class="penguin-container-secondary">
+                <img src="./assets/images/pengu-dancy.gif" class="penguin-gif-secondary" alt="Dancing Penguin" />
+              </div>
+              <div class="loader-dots">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          \`;
+          if (document.body) {
+            document.body.insertBefore(div, document.body.firstChild);
+          } else {
+            document.addEventListener('DOMContentLoaded', function() {
+              document.body.insertBefore(div, document.body.firstChild);
+            }, { once: true });
+          }
+        })();
+      `;
+      document.head.appendChild(script);
+    }
+  };
+
+  // Create loader immediately
+  createLoader();
+
+  // Also try creating it when body is ready
+  if (document.body) {
+    createLoader();
+  } else {
+    document.addEventListener("DOMContentLoaded", createLoader, { once: true });
+  }
+
+  // Hide secondary loader when page is fully loaded
+  const hideSecondaryLoader = () => {
+    const loader = document.getElementById("secondary-loading-screen");
+    if (loader) {
+      loader.style.opacity = "0";
+      setTimeout(() => {
+        if (loader.parentElement) {
+          loader.remove();
+        }
+        // Reveal content
+        showContent();
+      }, 300);
+    } else {
+      // If loader wasn't found, just reveal content
+      showContent();
+    }
+  };
+
+  // Wait for full page load
+  if (document.readyState === "complete") {
+    // Page already loaded - hide immediately
+    setTimeout(hideSecondaryLoader, 100);
+  } else {
+    window.addEventListener("load", hideSecondaryLoader, { once: true });
+    // Fallback - hide after a reasonable time
+    setTimeout(hideSecondaryLoader, 3000);
+  }
+}
+
 // Enhanced sparkles with mouse interaction
 const sparkles = [];
 let sparklesInitialized = false;

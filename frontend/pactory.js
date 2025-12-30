@@ -294,7 +294,7 @@ function renderProgressMilestones() {
           </div>
 
           <div>
-            <label>Views</label><br />
+            <label>Views</label>
             <input
               type="number"
               min="1"
@@ -309,7 +309,7 @@ function renderProgressMilestones() {
           </div>
 
           <div>
-            <label>Total Payout ($)</label><br />
+            <label>Total Payout ($)</label>
             <input
               type="number"
               min="0"
@@ -448,7 +448,7 @@ function renderAonRewards() {
           </div>
 
           <div>
-            <label>Views</label><br />
+            <label>Views</label>
             <input
               type="number"
               min="1"
@@ -463,7 +463,7 @@ function renderAonRewards() {
           </div>
 
           <div>
-            <label>Reward Payout ($)</label><br />
+            <label>Reward Payout ($)</label>
             <input
               type="number"
               min="0"

@@ -284,6 +284,14 @@
         flex: 1;
       }
 
+      .milestone-inputs label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #37474F;
+      }
+
       .milestone-inputs input {
         width: 100%;
       }
@@ -604,16 +612,18 @@
     <div id="music-player-container"></div>
 
     <script type="module">
-      import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
+      import { initLoadingScreen, initCursorBackground, initSecondaryLoadingScreen } from './loading-screen.js';
       import { initMusic } from './music.js';
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
           initLoadingScreen();
+          initSecondaryLoadingScreen();
           initCursorBackground();
           initMusic();
         });
       } else {
         initLoadingScreen();
+        initSecondaryLoadingScreen();
         initCursorBackground();
         initMusic();
       }

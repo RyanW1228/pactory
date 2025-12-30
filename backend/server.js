@@ -9,8 +9,17 @@ import "dotenv/config";
 const app = express();
 app.set("trust proxy", 1);
 
-const verifierWallet = new ethers.Wallet(process.env.VERIFIER_PRIVATE_KEY);
-console.log("Verifier address:", verifierWallet.address);
+// Check for VERIFIER_PRIVATE_KEY
+const privateKey = process.env.VERIFIER_PRIVATE_KEY;
+if (!privateKey || privateKey === "[ REDACTED ]" || privateKey.trim() === "") {
+  console.error("❌ ERROR: VERIFIER_PRIVATE_KEY is not set or is invalid!");
+  console.error("Please set VERIFIER_PRIVATE_KEY in your .env file");
+  console.error("Example: VERIFIER_PRIVATE_KEY=0x1234567890abcdef...");
+  process.exit(1);
+}
+
+const verifierWallet = new ethers.Wallet(privateKey);
+console.log("✅ Verifier address:", verifierWallet.address);
 
 // --------------------
 // ✅ CORS + Preflight (put BEFORE limiter + routes)

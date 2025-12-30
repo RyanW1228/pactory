@@ -247,17 +247,20 @@
       import {
         initLoadingScreen,
         initCursorBackground,
+        initSecondaryLoadingScreen,
       } from "./loading-screen.js";
       import { initMusic } from "./music.js";
       // Initialize immediately, don't wait
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => {
           initLoadingScreen();
+          initSecondaryLoadingScreen();
           initCursorBackground();
           initMusic();
         });
       } else {
         initLoadingScreen();
+        initSecondaryLoadingScreen();
         initCursorBackground();
         initMusic();
       }
