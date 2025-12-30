@@ -16,39 +16,48 @@
 
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+        background: linear-gradient(135deg, #F0F7FF 0%, #E3F2FD 50%, #D1E7FF 100%);
         min-height: 100vh;
-        padding: 20px;
-        color: #1565C0;
+        padding: 24px;
+        color: #1E3A5F;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       .container {
         max-width: 1000px;
         margin: 0 auto;
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 24px;
-        padding: 40px;
-        box-shadow: 0 20px 60px rgba(33, 150, 243, 0.2);
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        padding: 48px;
+        box-shadow: 0 4px 24px rgba(25, 118, 210, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
         backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 1;
+        border: 1px solid rgba(33, 150, 243, 0.1);
       }
 
       .header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 30px;
+        margin-bottom: 32px;
         padding-bottom: 20px;
-        border-bottom: 2px solid rgba(33, 150, 243, 0.2);
+        border-bottom: 1px solid rgba(33, 150, 243, 0.12);
         flex-wrap: wrap;
         gap: 16px;
       }
 
       h1 {
-        font-size: 2rem;
-        background: linear-gradient(135deg, #1976D2, #42A5F5);
+        font-size: 1.875rem;
+        background: linear-gradient(135deg, #1565C0, #1976D2);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
       }
 
       .header-controls {
@@ -62,87 +71,117 @@
         display: flex;
         align-items: center;
         gap: 12px;
-        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
+        background: #F5F9FF;
         padding: 12px 20px;
-        border-radius: 12px;
-        border: 2px solid rgba(33, 150, 243, 0.2);
+        border-radius: 8px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
       }
 
       .balance-display {
-        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
+        background: #F5F9FF;
         padding: 12px 20px;
-        border-radius: 12px;
-        border: 2px solid rgba(33, 150, 243, 0.2);
+        border-radius: 8px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
         font-weight: 600;
-        color: #0277BD;
+        color: #37474F;
+        font-size: 0.875rem;
       }
 
       button {
-        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        background: #1976D2;
         color: white;
         border: none;
         padding: 12px 24px;
-        border-radius: 12px;
-        font-size: 0.95rem;
+        border-radius: 6px;
+        font-size: 0.9375rem;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+        letter-spacing: 0.01em;
       }
 
       button:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        background: #1565C0;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.25);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(25, 118, 210, 0.2);
+      }
+
+      button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
       }
 
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+        transform: none;
       }
 
       .home-btn {
-        background: linear-gradient(135deg, #64B5F6, #42A5F5);
+        background: #546E7A;
+      }
+
+      .home-btn:hover:not(:disabled) {
+        background: #455A64;
       }
 
       .propose-btn {
-        background: linear-gradient(135deg, #4CAF50, #45A049);
+        background: #2E7D32;
         font-size: 1rem;
         padding: 14px 28px;
       }
 
-      .propose-btn:hover {
-        background: linear-gradient(135deg, #45A049, #3D8B40);
+      .propose-btn:hover:not(:disabled) {
+        background: #1B5E20;
+        box-shadow: 0 4px 8px rgba(46, 125, 50, 0.25);
       }
 
       .section {
-        margin-bottom: 20px;
-        background: linear-gradient(135deg, #F5F9FF 0%, #E8F4FD 100%);
-        border-radius: 16px;
-        border: 2px solid rgba(33, 150, 243, 0.15);
+        margin-bottom: 24px;
+        background: #FFFFFF;
+        border-radius: 12px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
         overflow: hidden;
-        transition: all 0.3s ease;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
       }
 
       .section:hover {
-        box-shadow: 0 8px 20px rgba(33, 150, 243, 0.2);
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+        border-color: rgba(33, 150, 243, 0.2);
       }
 
       .section summary {
         padding: 20px 24px;
         cursor: pointer;
         font-weight: 600;
-        font-size: 1.1rem;
-        color: #1565C0;
+        font-size: 1.125rem;
+        color: #1E3A5F;
         list-style: none;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
-        transition: all 0.2s;
+        background: #F5F9FF;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .section summary strong {
+        flex: 1;
+      }
+
+      .section summary span[id^="count-"] {
+        margin-left: auto;
+        margin-right: 24px;
       }
 
       .section summary:hover {
-        background: linear-gradient(135deg, #B3E5FC 0%, #90CAF9 100%);
+        background: #E3F2FD;
       }
 
       .section summary::-webkit-details-marker {
@@ -162,49 +201,52 @@
 
       .section .list {
         padding: 20px 24px;
-        background: white;
+        background: #FFFFFF;
       }
 
       .pact-card {
         padding: 20px;
-        border: 2px solid rgba(33, 150, 243, 0.2);
-        border-radius: 12px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        border-radius: 8px;
         margin: 12px 0;
-        background: linear-gradient(135deg, #FAFBFF 0%, #F0F7FF 100%);
-        transition: all 0.3s ease;
+        background: #FAFBFF;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
       }
 
       .pact-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(33, 150, 243, 0.2);
-        border-color: #2196F3;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+        border-color: rgba(33, 150, 243, 0.25);
       }
 
       .pact-title {
         font-weight: 600;
-        font-size: 1.1rem;
-        color: #1565C0;
+        font-size: 1.125rem;
+        color: #1E3A5F;
         margin-bottom: 12px;
+        letter-spacing: -0.01em;
       }
 
       .pact-meta {
-        font-size: 0.9rem;
-        color: #64B5F6;
-        margin: 6px 0;
+        font-size: 0.875rem;
+        color: #546E7A;
+        margin: 8px 0;
         display: flex;
         align-items: center;
         gap: 8px;
       }
 
       .pact-meta strong {
-        color: #0277BD;
+        color: #37474F;
+        font-weight: 600;
       }
 
       .pact-card button {
         margin-top: 12px;
         width: auto;
         padding: 10px 20px;
-        font-size: 0.9rem;
+        font-size: 0.875rem;
       }
 
       .empty {
@@ -212,18 +254,19 @@
         color: #90CAF9;
         font-style: italic;
         padding: 40px 20px;
-        font-size: 1rem;
+        font-size: 0.9375rem;
       }
 
       .count-badge {
         display: inline-block;
-        background: linear-gradient(135deg, #42A5F5, #2196F3);
+        background: #1976D2;
         color: white;
         padding: 4px 12px;
         border-radius: 12px;
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         font-weight: 600;
-        margin-left: 8px;
+        letter-spacing: 0.02em;
+        flex-shrink: 0;
       }
     </style>
   </head>
@@ -232,24 +275,27 @@
       <div class="header">
         <h1 id="dashboardTitle">Your Sponsor Pacts</h1>
         <div class="header-controls">
-          <button id="homeButton" class="home-btn">🏠 Home</button>
+          <button id="homeButton" class="home-btn">Home</button>
           <div class="view-toggle">
-            <span style="font-weight: 600; color: #0277BD;">View:</span>
-            <span id="currentView" style="font-weight: 600; color: #1565C0;">-</span>
+            <span style="font-weight: 600; color: #37474F;">View:</span>
+            <span id="currentView" style="font-weight: 600; color: #1E3A5F;">-</span>
             <button id="toggleViewButton" type="button">Switch</button>
           </div>
           <div class="balance-display">
-            💰 MNEE: <span id="mneeBalance">-</span>
+            MNEE Balance: <span id="mneeBalance">-</span>
           </div>
         </div>
       </div>
 
       <div style="margin-bottom: 24px;">
-        <button id="proposePactButton" class="propose-btn">✨ Propose New Pact</button>
+        <button id="proposePactButton" class="propose-btn">Propose New Pact</button>
       </div>
 
       <div id="sectionsContainer"></div>
     </div>
+
+    <div id="fireworks-container"></div>
+    <div id="music-player-container"></div>
 
     <script type="module">
       import { initLoadingScreen, initCursorBackground } from './loading-screen.js';

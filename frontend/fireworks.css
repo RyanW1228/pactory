@@ -1,4 +1,3 @@
-/* Fireworks Styles */
 #fireworks-container {
   position: fixed;
   top: 0;
@@ -6,29 +5,30 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 10001;
-  overflow: hidden;
+  z-index: 9998;
 }
 
 .firework-particle {
   position: absolute;
+  width: 4px;
+  height: 4px;
   background: white;
   border-radius: 50%;
-  box-shadow: 
-    0 0 10px rgba(255, 255, 255, 0.8),
-    0 0 20px rgba(255, 255, 255, 0.6),
-    0 0 30px rgba(255, 255, 255, 0.4);
-  animation: firework-explode 2s ease-out forwards;
+  box-shadow: 0 0 6px white, 0 0 12px rgba(255, 255, 255, 0.8);
+  animation: firework-fade-out 2s ease-out forwards;
+  --vx: 0;
+  --vy: 0;
 }
 
-@keyframes firework-explode {
+@keyframes firework-fade-out {
   0% {
     transform: translate(0, 0) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translate(var(--vx), var(--vy)) scale(0);
+    transform: translate(calc(var(--vx) * 100px), calc(var(--vy) * 100px)) scale(0);
     opacity: 0;
   }
 }
+
 

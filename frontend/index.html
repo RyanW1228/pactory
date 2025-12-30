@@ -16,51 +16,64 @@
 
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+        background: linear-gradient(135deg, #F0F7FF 0%, #E3F2FD 50%, #D1E7FF 100%);
         min-height: 100vh;
-        padding: 20px;
-        color: #1565C0;
+        padding: 24px;
+        color: #1E3A5F;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       .container {
         max-width: 600px;
         margin: 0 auto;
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 24px;
-        padding: 40px;
-        box-shadow: 0 20px 60px rgba(33, 150, 243, 0.2);
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        padding: 48px;
+        box-shadow: 0 4px 24px rgba(25, 118, 210, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
         backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 1;
+        border: 1px solid rgba(33, 150, 243, 0.1);
       }
 
       h1 {
-        font-size: 2.5rem;
-        margin-bottom: 10px;
-        background: linear-gradient(135deg, #1976D2, #42A5F5);
+        font-size: 2.25rem;
+        margin-bottom: 8px;
+        background: linear-gradient(135deg, #1565C0, #1976D2);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
         text-align: center;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
       }
 
       .subtitle {
         text-align: center;
-        color: #64B5F6;
-        margin-bottom: 40px;
-        font-size: 1.1rem;
+        color: #546E7A;
+        margin-bottom: 32px;
+        font-size: 1rem;
+        font-weight: 400;
+        letter-spacing: 0.01em;
       }
 
       .card {
-        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 20px;
-        border: 2px solid rgba(33, 150, 243, 0.2);
-        transition: transform 0.2s, box-shadow 0.2s;
+        background: #FFFFFF;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 16px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
       }
 
       .card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(33, 150, 243, 0.3);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+        border-color: rgba(33, 150, 243, 0.2);
       }
 
       .info-row {
@@ -77,91 +90,111 @@
 
       .info-label {
         font-weight: 600;
-        color: #0277BD;
-        font-size: 0.95rem;
+        color: #37474F;
+        font-size: 0.875rem;
+        letter-spacing: 0.01em;
       }
 
       .info-value {
-        color: #1565C0;
+        color: #1E3A5F;
         font-weight: 500;
-        font-family: 'Monaco', 'Menlo', monospace;
-        font-size: 0.9rem;
+        font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+        font-size: 0.875rem;
+        letter-spacing: 0.01em;
       }
 
       button {
-        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        background: #1976D2;
         color: white;
         border: none;
-        padding: 14px 28px;
-        border-radius: 12px;
-        font-size: 1rem;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 0.9375rem;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
         width: 100%;
-        margin-top: 10px;
+        margin-top: 8px;
+        letter-spacing: 0.01em;
       }
 
       button:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
-        background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+        background: #1565C0;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.25);
       }
 
       button:active:not(:disabled) {
         transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(25, 118, 210, 0.2);
+      }
+
+      button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
       }
 
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
         box-shadow: none;
+        transform: none;
       }
 
       .view-toggle {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        background: rgba(255, 255, 255, 0.6);
-        padding: 16px;
-        border-radius: 12px;
-        margin: 20px 0;
+        background: #F5F9FF;
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin: 24px 0;
+        border: 1px solid rgba(33, 150, 243, 0.1);
       }
 
       .view-toggle button {
         width: auto;
-        padding: 10px 20px;
+        padding: 8px 16px;
         margin: 0;
-        font-size: 0.9rem;
+        font-size: 0.875rem;
       }
 
       .badge {
         display: inline-block;
-        background: linear-gradient(135deg, #42A5F5, #2196F3);
+        background: #1976D2;
         color: white;
-        padding: 6px 14px;
-        border-radius: 20px;
-        font-size: 0.85rem;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.75rem;
         font-weight: 600;
         margin-left: 8px;
+        letter-spacing: 0.02em;
       }
 
       .primary-btn {
-        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-        margin-top: 20px;
-        font-size: 1.1rem;
-        padding: 16px 32px;
+        background: #1976D2;
+        margin-top: 16px;
+        font-size: 1rem;
+        padding: 14px 28px;
+      }
+
+      .primary-btn:hover:not(:disabled) {
+        background: #1565C0;
       }
 
       .secondary-btn {
-        background: linear-gradient(135deg, #64B5F6 0%, #42A5F5 100%);
+        background: #546E7A;
+      }
+
+      .secondary-btn:hover:not(:disabled) {
+        background: #455A64;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>✨ Pactory</h1>
+      <h1>Pactory</h1>
       <p class="subtitle">Create & manage creator-sponsor pacts</p>
 
       <div class="card">
@@ -184,10 +217,13 @@
         <button id="toggleDefaultModeButton" class="secondary-btn" disabled>Switch</button>
       </div>
 
-      <button id="connectButton" class="primary-btn">🔗 Connect Wallet</button>
+      <button id="connectButton" class="primary-btn">Connect Wallet</button>
       <button id="logoutButton" class="secondary-btn" style="display: none">Logout</button>
-      <button id="viewPactsButton" class="primary-btn">📋 View Pacts</button>
+      <button id="viewPactsButton" class="primary-btn">View Pacts</button>
     </div>
+
+    <div id="fireworks-container"></div>
+    <div id="music-player-container"></div>
 
     <script type="module">
       import { initLoadingScreen, initCursorBackground } from './loading-screen.js';

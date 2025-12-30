@@ -114,7 +114,7 @@ function renderSections(mode) {
       const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       return `
         <details class="section">
-          <summary><strong>${title}</strong> <span class="count-badge" id="count-${id}">(0)</span></summary>
+          <summary><strong>${title}</strong><span id="count-${id}" class="count-badge">(0)</span></summary>
           <div id="list-${id}" class="list">
             <p class="empty">No pacts yet.</p>
           </div>
@@ -240,16 +240,16 @@ async function loadSentForReview(mode) {
           mode === "sponsor" ? p.creator_address : p.sponsor_address;
 
         return `
-          <div class="pact-card">
-            <div class="pact-title">${displayPactTitle(p)}</div>
-            <div class="pact-meta"><strong>Other party:</strong> ${other}</div>
-            <div class="pact-meta"><strong>${maxPayoutLine(p)}</strong></div>
-            <div class="pact-meta">Created: ${formatEastern(
+          <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+            <div style="font-weight:600;">${displayPactTitle(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
             )}</div>
             <button type="button" data-open-pact="${
               p.id
-            }" data-open-mode="sent">
+            }" data-open-mode="sent" style="margin-top:8px;">
               Manage
             </button>
           </div>
@@ -298,16 +298,16 @@ async function loadAwaitingYourReview(mode) {
           mode === "sponsor" ? p.creator_address : p.sponsor_address;
 
         return `
-          <div class="pact-card">
-            <div class="pact-title">${displayPactTitle(p)}</div>
-            <div class="pact-meta"><strong>Other party:</strong> ${other}</div>
-            <div class="pact-meta"><strong>${maxPayoutLine(p)}</strong></div>
-            <div class="pact-meta">Created: ${formatEastern(
+          <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+            <div style="font-weight:600;">${displayPactTitle(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
             )}</div>
             <button type="button" data-open-pact="${
               p.id
-            }" data-open-mode="awaiting">
+            }" data-open-mode="awaiting" style="margin-top:8px;">
               Manage
             </button>
           </div>
@@ -408,13 +408,13 @@ async function loadCreated(mode) {
             mode === "sponsor" ? p.creator_address : p.sponsor_address;
 
           return `
-            <div class="pact-card">
-              <div class="pact-title">${displayPactTitle(p)}</div>
-              <div class="pact-meta"><strong>Other party:</strong> ${other}</div>
-              <div class="pact-meta"><strong>${maxPayoutLine(
+            <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+              <div style="font-weight:600;">${displayPactTitle(p)}</div>
+              <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+              <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(
                 p
-              )}</strong></div>
-              <div class="pact-meta">Created: ${formatEastern(
+              )}</div>
+              <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
                 p.created_at
               )}</div>
 
@@ -422,6 +422,7 @@ async function loadCreated(mode) {
                 type="button"
                 data-open-pact="${p.id}"
                 data-open-mode="${t.openMode}"
+                style="margin-top:8px;"
               >
                 Manage
               </button>

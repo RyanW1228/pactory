@@ -16,147 +16,120 @@
 
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+        background: linear-gradient(135deg, #F0F7FF 0%, #E3F2FD 50%, #D1E7FF 100%);
         min-height: 100vh;
-        padding: 20px;
-        color: #1565C0;
+        padding: 24px;
+        color: #1E3A5F;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       .container {
         max-width: 700px;
         margin: 0 auto;
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 24px;
-        padding: 40px;
-        box-shadow: 0 20px 60px rgba(33, 150, 243, 0.2);
-        backdrop-filter: blur(10px);
-      }
-
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-        padding-bottom: 20px;
-        border-bottom: 2px solid rgba(33, 150, 243, 0.2);
-      }
-
-      h2 {
-        font-size: 2rem;
-        background: linear-gradient(135deg, #1976D2, #42A5F5);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
-
-      .meta {
-        font-size: 0.9rem;
-        color: #64B5F6;
-        margin-bottom: 24px;
-        padding: 12px 16px;
-        background: linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%);
-        border-radius: 12px;
-        border: 2px solid rgba(33, 150, 243, 0.2);
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        padding: 48px;
+        box-shadow: 0 4px 24px rgba(25, 118, 210, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+        position: relative;
+        z-index: 1;
+        border: 1px solid rgba(33, 150, 243, 0.1);
       }
 
       .card {
-        background: linear-gradient(135deg, #F5F9FF 0%, #E8F4FD 100%);
-        border-radius: 16px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        border-radius: 12px;
         padding: 24px;
-        border: 2px solid rgba(33, 150, 243, 0.2);
+        margin-top: 24px;
+        background: #FFFFFF;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
       }
 
       .row {
-        margin-bottom: 20px;
+        margin: 16px 0;
       }
 
       label {
         font-weight: 600;
         display: block;
-        margin-bottom: 10px;
-        color: #0277BD;
-        font-size: 0.95rem;
+        margin-bottom: 8px;
+        color: #37474F;
+        font-size: 0.875rem;
+        letter-spacing: 0.01em;
       }
 
       input[type="url"],
       input[type="text"] {
         width: 100%;
-        padding: 14px 16px;
-        border-radius: 12px;
-        border: 2px solid rgba(33, 150, 243, 0.3);
+        padding: 10px 14px;
+        border-radius: 6px;
+        border: 1px solid rgba(33, 150, 243, 0.2);
         outline: none;
-        font-size: 1rem;
+        font-size: 0.9375rem;
         background: white;
-        color: #1565C0;
-        transition: all 0.3s;
+        color: #1E3A5F;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       input[type="url"]:focus,
       input[type="text"]:focus {
-        border-color: #2196F3;
-        box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
-      }
-
-      .button-group {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        margin-top: 24px;
+        border-color: #1976D2;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
       }
 
       button {
-        padding: 14px 24px;
-        border-radius: 12px;
+        padding: 12px 24px;
+        border-radius: 6px;
         border: none;
         cursor: pointer;
-        font-size: 0.95rem;
+        font-size: 0.9375rem;
         font-weight: 600;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
-        flex: 1;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        letter-spacing: 0.01em;
       }
 
       .btn-primary {
-        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        background: #1976D2;
         color: white;
+        box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
       }
 
       .btn-primary:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        background: #1565C0;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.25);
       }
 
-      .btn-primary:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+      .btn-primary:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(25, 118, 210, 0.2);
+      }
+
+      .btn-primary:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
       }
 
       .btn-secondary {
-        background: linear-gradient(135deg, #64B5F6, #42A5F5);
+        background: #546E7A;
         color: white;
+        box-shadow: 0 2px 4px rgba(84, 110, 122, 0.2);
       }
 
-      .btn-secondary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+      .btn-secondary:hover:not(:disabled) {
+        background: #455A64;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(84, 110, 122, 0.25);
       }
 
       .status {
         margin-top: 16px;
-        padding: 12px 16px;
-        border-radius: 10px;
-        font-size: 0.9rem;
-        font-weight: 500;
-        min-height: 16px;
-        transition: all 0.3s;
-      }
-
-      .status:empty {
-        display: none;
-      }
-
-      .status:not(.ok) {
+        font-size: 0.875rem;
         color: #C62828;
+        min-height: 20px;
+        padding: 8px 12px;
+        border-radius: 6px;
         background: rgba(244, 67, 54, 0.1);
       }
 
@@ -164,40 +137,57 @@
         color: #2E7D32;
         background: rgba(76, 175, 80, 0.1);
       }
+
+      .meta {
+        font-size: 0.875rem;
+        color: #546E7A;
+        margin-top: 8px;
+      }
+
+      h2 {
+        font-size: 1.5rem;
+        color: #1E3A5F;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin-top: 16px;
+      }
     </style>
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h2 id="title">🎬 Input Video Link</h2>
-        <button id="backButton" class="btn-secondary">← Back</button>
-      </div>
+      <button id="backButton" class="btn-secondary">Back</button>
 
+      <h2 id="title">Input Video Link</h2>
       <div class="meta" id="meta"></div>
 
       <div class="card">
-        <div class="row">
-          <label for="videoLinkInput">Video link (Instagram / Reels / etc.)</label>
-          <input
-            id="videoLinkInput"
-            type="url"
-            placeholder="https://..."
-            autocomplete="off"
-          />
-        </div>
+      <div class="row">
+        <label for="videoLinkInput"
+          >Video link (Instagram / Reels / etc.)</label
+        >
+        <input
+          id="videoLinkInput"
+          type="url"
+          placeholder="https://..."
+          autocomplete="off"
+        />
+      </div>
 
-        <div class="button-group">
-          <button id="saveButton" class="btn-primary" type="button">
-            💾 Save Video Link
-          </button>
-          <button id="cancelButton" class="btn-secondary" type="button">
-            Cancel
-          </button>
-        </div>
+      <div style="display: flex; gap: 10px; align-items: center">
+        <button id="saveButton" class="btn-primary" type="button">
+          Save Video Link
+        </button>
+        <button id="cancelButton" class="btn-secondary" type="button">
+          Cancel
+        </button>
+      </div>
 
-        <div id="status" class="status"></div>
+      <div id="status" class="status"></div>
       </div>
     </div>
+
+    <div id="fireworks-container"></div>
+    <div id="music-player-container"></div>
 
     <script type="module">
       import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
