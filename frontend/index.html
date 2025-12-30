@@ -2,23 +2,266 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>pact</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pactory - Welcome</title>
+    <link rel="stylesheet" href="./loading-screen.css" />
+    <link rel="stylesheet" href="./fireworks.css" />
+    <link rel="stylesheet" href="./music.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        /* Prevent "flash" before loader */
+        .container {
+          visibility: hidden;
+        }
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+          "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+        background: linear-gradient(
+          135deg,
+          #f0f7ff 0%,
+          #e3f2fd 50%,
+          #d1e7ff 100%
+        );
+        min-height: 100vh;
+        padding: 24px;
+        color: #1e3a5f;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        padding: 48px;
+        box-shadow: 0 4px 24px rgba(25, 118, 210, 0.08),
+          0 1px 3px rgba(0, 0, 0, 0.04);
+        backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 1;
+        border: 1px solid rgba(33, 150, 243, 0.1);
+      }
+
+      h1 {
+        font-size: 2.25rem;
+        margin-bottom: 8px;
+        background: linear-gradient(135deg, #1565c0, #1976d2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-align: center;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        text-align: center;
+        color: #546e7a;
+        margin-bottom: 32px;
+        font-size: 1rem;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+      }
+
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 16px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      }
+
+      .card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.12),
+          0 1px 3px rgba(0, 0, 0, 0.06);
+        border-color: rgba(33, 150, 243, 0.2);
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(33, 150, 243, 0.1);
+      }
+
+      .info-row:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        font-weight: 600;
+        color: #37474f;
+        font-size: 0.875rem;
+        letter-spacing: 0.01em;
+      }
+
+      .info-value {
+        color: #1e3a5f;
+        font-weight: 500;
+        font-family: "SF Mono", "Monaco", "Menlo", monospace;
+        font-size: 0.875rem;
+        letter-spacing: 0.01em;
+      }
+
+      button {
+        background: #1976d2;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+        width: 100%;
+        margin-top: 8px;
+        letter-spacing: 0.01em;
+      }
+
+      button:hover:not(:disabled) {
+        background: #1565c0;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.25);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(25, 118, 210, 0.2);
+      }
+
+      button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+      }
+
+      .view-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #f5f9ff;
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin: 24px 0;
+        border: 1px solid rgba(33, 150, 243, 0.1);
+      }
+
+      .view-toggle button {
+        width: auto;
+        padding: 8px 16px;
+        margin: 0;
+        font-size: 0.875rem;
+      }
+
+      .badge {
+        display: inline-block;
+        background: #1976d2;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 8px;
+        letter-spacing: 0.02em;
+      }
+
+      .primary-btn {
+        background: #1976d2;
+        margin-top: 16px;
+        font-size: 1rem;
+        padding: 14px 28px;
+      }
+
+      .primary-btn:hover:not(:disabled) {
+        background: #1565c0;
+      }
+
+      .secondary-btn {
+        background: #546e7a;
+      }
+
+      .secondary-btn:hover:not(:disabled) {
+        background: #455a64;
+      }
+    </style>
   </head>
   <body>
-    <button id="connectButton">Connect</button>
-    <button id="logoutButton" style="display: none">Logout</button>
+    <div class="container">
+      <h1>Pactory</h1>
+      <p class="subtitle">Create & manage creator-sponsor pacts</p>
 
-    <p>Address: <span id="account">Not connected</span></p>
-    <p>MNEE Balance: <span id="mneeBalance">-</span></p>
-    <p>ETH Balance: <span id="ethBalance">-</span></p>
+      <div class="card">
+        <div class="info-row">
+          <span class="info-label">Wallet Address</span>
+          <span class="info-value" id="account">Not connected</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">MNEE Balance</span>
+          <span class="info-value" id="mneeBalance">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">ETH Balance</span>
+          <span class="info-value" id="ethBalance">-</span>
+        </div>
+      </div>
 
-    <p>
-      Current view: <span id="defaultModeText">-</span>
-      <button id="toggleDefaultModeButton" disabled>Switch</button>
-    </p>
+      <div class="view-toggle">
+        <span class="info-label"
+          >Current view: <span id="defaultModeText">-</span></span
+        >
+        <button id="toggleDefaultModeButton" class="secondary-btn" disabled>
+          Switch
+        </button>
+      </div>
 
-    <button id="viewPactsButton">View Pacts</button>
+      <button id="connectButton" class="primary-btn">Connect Wallet</button>
+      <button id="logoutButton" class="secondary-btn" style="display: none">
+        Logout
+      </button>
+      <button id="viewPactsButton" class="primary-btn">View Pacts</button>
+    </div>
 
+    <div id="fireworks-container"></div>
+    <div id="music-player-container"></div>
+
+    <script type="module">
+      import {
+        initLoadingScreen,
+        initCursorBackground,
+      } from "./loading-screen.js";
+      import { initMusic } from "./music.js";
+      // Initialize immediately, don't wait
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => {
+          initLoadingScreen();
+          initCursorBackground();
+          initMusic();
+        });
+      } else {
+        initLoadingScreen();
+        initCursorBackground();
+        initMusic();
+      }
+    </script>
     <script type="module" src="./index.js"></script>
   </body>
 </html>

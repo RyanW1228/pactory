@@ -79,6 +79,20 @@ CREATE TABLE IF NOT EXISTS pacts (
   video_link TEXT
 );
 
+CREATE TABLE IF NOT EXISTS video_stats (
+  pact_id INTEGER PRIMARY KEY REFERENCES pacts(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,
+  video_url TEXT NOT NULL,
+
+  views INTEGER NOT NULL,
+  likes INTEGER NOT NULL,
+  comments INTEGER NOT NULL,
+
+  last_checked_at TEXT NOT NULL
+);
+
+
+
 CREATE INDEX IF NOT EXISTS idx_pacts_status ON pacts(status);
 CREATE INDEX IF NOT EXISTS idx_pacts_sponsor ON pacts(sponsor_address);
 CREATE INDEX IF NOT EXISTS idx_pacts_creator ON pacts(creator_address);
@@ -223,6 +237,52 @@ function pactEquivalent(oldPactRow, incoming) {
     sameAonLocked &&
     sameAon
   );
+}
+
+async function scrapeTikTokVideo(videoUrl) {
+  const res = await fetch(
+    `https://api.apify.com/v2/acts/clockworks~tiktok-scraper/run-sync-get-dataset-items?token=${process.env.APIFY_TOKEN}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        videoUrls: [videoUrl],
+        resultsPerPage: 1,
+      }),
+    }
+  );
+
+  const data = await res.json();
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("no data returned from Apify");
+  }
+
+  const v = data[0];
+
+  return {
+    views: v.playCount ?? 0,
+    likes: v.diggCount ?? 0,
+    comments: v.commentCount ?? 0,
+  };
+}
+
+// double check math on this
+
+function calculateUnlocked(pact, views) {
+  let unlocked = 0;
+
+  const progress = JSON.parse(pact.progress_json || "[]");
+  const aon = JSON.parse(pact.aon_json || "[]");
+
+  for (const m of progress) {
+    if (views >= m.views) unlocked = Math.max(unlocked, m.payout);
+  }
+
+  for (const r of aon) {
+    if (views >= r.views) unlocked += r.payout;
+  }
+
+  return unlocked;
 }
 
 // --------------------
@@ -593,6 +653,179 @@ app.post("/api/pacts/:id/video-link", (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+// Create on-chain createPactWithSig signature (ONLY sponsor should call this)
+app.post("/api/pacts/:id/create-sig", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid pact id");
+
+    const { address, tokenDecimals, escrowAddress, chainId } = req.body || {};
+    if (!address || !ethers.isAddress(address))
+      throw new Error("Invalid address");
+
+    const decimals = Number(tokenDecimals);
+    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+      throw new Error("Invalid tokenDecimals");
+    }
+
+    // ✅ validate escrowAddress
+    if (!escrowAddress || !ethers.isAddress(escrowAddress)) {
+      throw new Error("Missing escrowAddress");
+    }
+    const escrow = ethers.getAddress(escrowAddress);
+
+    // ✅ validate chainId (must be Sepolia for your setup)
+    const cid = Number(chainId);
+    if (!Number.isInteger(cid)) throw new Error("Missing chainId");
+    if (cid !== 11155111) throw new Error("Wrong chainId (expected Sepolia)");
+
+    const addr = normAddr(address);
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    // must be sponsor
+    if (normAddr(pact.sponsor_address) !== addr) {
+      throw new Error("Only sponsor can create on-chain signature");
+    }
+
+    // your DB says "created" is the state prior to funding
+    if (String(pact.status) !== "created") {
+      throw new Error("Pact must be Created to sign on-chain creation");
+    }
+
+    // must have video link before sponsor funds (matches your UI rule)
+    if (!String(pact.video_link || "").trim()) {
+      throw new Error("Video link must be set before funding");
+    }
+
+    const maxUsd = computeMaxPayoutUsd(pact);
+    if (!Number.isFinite(maxUsd) || maxUsd <= 0) {
+      throw new Error("Invalid max payout");
+    }
+
+    const cents = Math.round(maxUsd * 100);
+    const maxPayoutRaw = ethers.parseUnits((cents / 100).toFixed(2), decimals);
+
+    const durationSeconds = Number(pact.duration_seconds);
+    if (!Number.isInteger(durationSeconds) || durationSeconds <= 0) {
+      throw new Error("Invalid duration");
+    }
+
+    const creator = requireAddress(pact.creator_address, "creator");
+    const sponsor = requireAddress(pact.sponsor_address, "sponsor");
+
+    // expiry (10 minutes)
+    const expiry = Math.floor(Date.now() / 1000) + 10 * 60;
+
+    const packedHash = ethers.solidityPackedKeccak256(
+      [
+        "uint256",
+        "address",
+        "address",
+        "uint256",
+        "address",
+        "uint256",
+        "uint256",
+        "uint256",
+      ],
+      [
+        cid, // ✅ was 11155111
+        escrow,
+        sponsor,
+        id,
+        creator,
+        maxPayoutRaw,
+        durationSeconds,
+        expiry,
+      ]
+    );
+
+    // Contract does toEthSignedMessageHash(packedHash), so backend must sign the 32-byte hash as a message.
+    const sig = await verifierWallet.signMessage(ethers.getBytes(packedHash));
+
+    res.json({
+      ok: true,
+      pactId: id,
+      sponsor,
+      creator,
+      durationSeconds,
+      maxPayoutRaw: maxPayoutRaw.toString(),
+      expiry,
+      sig,
+      escrow,
+      chainId: cid,
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+app.post("/api/pacts/:id/sync-views", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw new Error("Invalid pact id");
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    if (!pact.video_link) {
+      throw new Error("No video link attached to pact");
+    }
+
+    const platform = (() => {
+      const u = String(pact.video_link || "").toLowerCase();
+      if (u.includes("tiktok.com")) return "tiktok";
+      if (u.includes("instagram.com")) return "instagram";
+      return "unknown";
+    })();
+
+    let stats;
+    if (platform === "tiktok") {
+      stats = await scrapeTikTokVideo(pact.video_link);
+    } else {
+      throw new Error("Instagram not wired yet");
+    }
+
+    const now = new Date().toISOString();
+
+    db.prepare(
+      `
+      INSERT INTO video_stats (
+        pact_id, platform, video_url,
+        views, likes, comments, last_checked_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(pact_id) DO UPDATE SET
+        views=excluded.views,
+        likes=excluded.likes,
+        comments=excluded.comments,
+        last_checked_at=excluded.last_checked_at
+    `
+    ).run(
+      id,
+      platform,
+      pact.video_link,
+      stats.views,
+      stats.likes,
+      stats.comments,
+      now
+    );
+
+    const unlocked = calculateUnlocked(pact, stats.views);
+
+    res.json({
+      ok: true,
+      platform,
+      views: stats.views,
+      likes: stats.likes,
+      comments: stats.comments,
+      unlockedPayout: unlocked,
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 

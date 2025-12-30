@@ -2,91 +2,505 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Pactory</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pactory - Create Pact</title>
+    <link rel="stylesheet" href="./loading-screen.css" />
+    <link rel="stylesheet" href="./fireworks.css" />
+    <link rel="stylesheet" href="./music.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        background: linear-gradient(135deg, #F0F7FF 0%, #E3F2FD 50%, #D1E7FF 100%);
+        min-height: 100vh;
+        padding: 24px;
+        color: #1E3A5F;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        padding: 48px;
+        box-shadow: 0 4px 24px rgba(25, 118, 210, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+        backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 1;
+        border: 1px solid rgba(33, 150, 243, 0.1);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 32px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid rgba(33, 150, 243, 0.12);
+      }
+
+      h1 {
+        font-size: 1.875rem;
+        background: linear-gradient(135deg, #1565C0, #1976D2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      button {
+        background: #1976D2;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+        letter-spacing: 0.01em;
+      }
+
+      button:hover:not(:disabled) {
+        background: #1565C0;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.25);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(25, 118, 210, 0.2);
+      }
+
+      button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .exit-btn {
+        background: #D32F2F;
+      }
+      
+      .exit-btn:hover {
+        background: #C62828;
+      }
+
+      .role-toggle {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #F5F9FF;
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+      }
+
+      .form-section {
+        background: #FFFFFF;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 24px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      }
+
+      .form-section:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+        border-color: rgba(33, 150, 243, 0.2);
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        color: #37474F;
+        margin-bottom: 8px;
+        font-size: 0.875rem;
+        letter-spacing: 0.01em;
+      }
+
+      input[type="text"],
+      input[type="number"] {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid rgba(33, 150, 243, 0.2);
+        border-radius: 6px;
+        font-size: 0.9375rem;
+        background: white;
+        color: #1E3A5F;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      input[type="text"]:focus,
+      input[type="number"]:focus {
+        outline: none;
+        border-color: #1976D2;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+      }
+
+      .duration-inputs {
+        display: flex;
+        gap: 16px;
+        margin-top: 12px;
+      }
+
+      .duration-inputs > div {
+        flex: 1;
+      }
+
+      .duration-inputs input {
+        width: 100%;
+      }
+
+      .status-text {
+        display: block;
+        margin-top: 8px;
+        font-size: 0.85rem;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 500;
+      }
+
+      .status-text:empty {
+        display: none;
+      }
+
+      .status-ok {
+        color: #2E7D32;
+        background: rgba(76, 175, 80, 0.1);
+      }
+
+      .status-error {
+        color: #C62828;
+        background: rgba(244, 67, 54, 0.1);
+      }
+
+      hr {
+        border: none;
+        height: 1px;
+        background: rgba(33, 150, 243, 0.12);
+        margin: 32px 0;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .section-header strong {
+        font-size: 1.125rem;
+        color: #1E3A5F;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      .checkbox-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        accent-color: #2196F3;
+      }
+
+      .milestone-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: #FAFBFF;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+
+      .milestone-row:hover {
+        border-color: rgba(33, 150, 243, 0.25);
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.12);
+        transform: translateY(-1px);
+      }
+
+      .reward-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: #FFFBF0;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border: 1px solid rgba(255, 193, 7, 0.15);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+      
+      .reward-row:hover {
+        border-color: rgba(255, 193, 7, 0.25);
+        box-shadow: 0 2px 8px rgba(255, 193, 7, 0.15);
+        transform: translateY(-1px);
+      }
+
+      .milestone-label,
+      .reward-label {
+        min-width: 100px;
+        font-weight: 600;
+        color: #37474F;
+        font-size: 0.875rem;
+      }
+
+      .milestone-inputs {
+        display: flex;
+        gap: 16px;
+        flex: 1;
+      }
+
+      .milestone-inputs > div {
+        flex: 1;
+      }
+
+      .milestone-inputs input {
+        width: 100%;
+      }
+
+      .rate-display {
+        min-width: 260px;
+        padding: 12px 16px;
+        background: #E3F2FD;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        color: #1565C0;
+        border: 1px solid rgba(33, 150, 243, 0.15);
+        font-weight: 500;
+      }
+      
+      .reward-row .rate-display {
+        background: #FFF8E1;
+        border: 1px solid rgba(255, 193, 7, 0.2);
+        color: #E65100;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+
+      .button-group button {
+        flex: 1;
+        min-width: 120px;
+      }
+
+      .graph-container {
+        background: #FFFFFF;
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 24px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
+      }
+
+      #payoutGraph {
+        width: 100%;
+        height: auto;
+        border: 1px solid rgba(33, 150, 243, 0.15);
+        border-radius: 8px;
+        background: #FAFBFF;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+      }
+
+      .slider-container {
+        margin-top: 20px;
+      }
+
+      .slider-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        font-size: 0.875rem;
+        color: #37474F;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        height: 8px;
+        border-radius: 5px;
+        background: linear-gradient(90deg, #BBDEFB, #90CAF9);
+        outline: none;
+        -webkit-appearance: none;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        -moz-appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #1976D2;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.4);
+      }
+
+      input[type="range"]::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #1976D2;
+        cursor: pointer;
+        border: none;
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.4);
+      }
+
+      .payout-display {
+        margin-top: 12px;
+        padding: 12px 16px;
+        background: #E3F2FD;
+        border-radius: 8px;
+        font-size: 0.9375rem;
+        color: #1565C0;
+        border: 1px solid rgba(33, 150, 243, 0.15);
+      }
+
+      .payout-display strong {
+        font-size: 1.125rem;
+        color: #1E3A5F;
+      }
+
+      .submit-section {
+        margin-top: 32px;
+        padding-top: 24px;
+        border-top: 1px solid rgba(33, 150, 243, 0.12);
+      }
+
+      #sendForReviewButton {
+        width: 100%;
+        padding: 14px 28px;
+        font-size: 1rem;
+        background: #2E7D32;
+        border-radius: 6px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+
+      #sendForReviewButton:hover {
+        background: #1B5E20;
+        box-shadow: 0 4px 8px rgba(46, 125, 50, 0.25);
+      }
+
+      #sendForReviewStatus {
+        margin-top: 12px;
+        padding: 10px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+
+      small {
+        display: block;
+        font-size: 0.85rem;
+        margin-top: 8px;
+        padding: 8px 12px;
+        border-radius: 8px;
+      }
+
+      #noProgressPayText,
+      #noAonPayText {
+        color: #64B5F6;
+        background: rgba(100, 181, 246, 0.1);
+        padding: 12px;
+        border-radius: 8px;
+        font-style: italic;
+      }
+    </style>
   </head>
   <body>
-    <button id="exitButton">Exit</button>
+    <div class="container">
+      <div class="header">
+        <h1>Create Your Pact</h1>
+        <button id="exitButton" class="exit-btn">Exit</button>
+      </div>
 
-    <h1>Welcome to the pactory</h1>
-
-    <p>
-      Your Role: <span id="defaultRoleText">-</span>
+      <div class="role-toggle">
+        <span style="font-weight: 600; color: #37474F;">Your Role:</span>
+        <span id="defaultRoleText" style="font-weight: 600; color: #1E3A5F;">-</span>
       <button id="toggleRoleButton" type="button" disabled>Switch</button>
-    </p>
+      </div>
 
-    <label style="display: block; margin-top: 10px">
-      Pact Name
+      <div class="form-section">
+        <label for="pactName">Pact Name</label>
       <input
         id="pactName"
         type="text"
         maxlength="80"
         required
         placeholder="e.g., Nike January Campaign"
-        style="width: 320px; padding: 8px; margin-top: 6px"
-      />
-    </label>
-
-    <p>
-      <label id="counterpartyLabel" for="counterpartyInput"
-        >Counterparty address</label
-      ><br />
-      <input id="counterpartyInput" type="text" placeholder="0x..." size="44" />
-      <br />
-      <small id="counterpartyStatus"></small>
-    </p>
-
-    <p><strong>Duration</strong></p>
-
-    <div style="display: flex; gap: 12px; align-items: center">
-      <div>
-        <label for="durationDays">Days</label><br />
-        <input
-          id="durationDays"
-          type="number"
-          min="0"
-          step="1"
-          value="0"
-          style="width: 70px"
         />
       </div>
 
-      <div>
-        <label for="durationHours">Hours</label><br />
-        <input
-          id="durationHours"
-          type="number"
-          min="0"
-          max="23"
-          step="1"
-          value="0"
-          style="width: 70px"
-        />
+      <div class="form-section">
+        <label id="counterpartyLabel" for="counterpartyInput">Counterparty address</label>
+        <input id="counterpartyInput" type="text" placeholder="0x..." />
+        <small id="counterpartyStatus" class="status-text"></small>
       </div>
 
+      <div class="form-section">
+        <label><strong>Duration</strong></label>
+        <div class="duration-inputs">
+          <div>
+            <label for="durationDays" style="font-size: 0.85rem; margin-bottom: 4px;">Days</label>
+            <input id="durationDays" type="number" min="0" step="1" value="0" />
+          </div>
+          <div>
+            <label for="durationHours" style="font-size: 0.85rem; margin-bottom: 4px;">Hours</label>
+            <input id="durationHours" type="number" min="0" max="23" step="1" value="0" />
+          </div>
       <div>
-        <label for="durationMinutes">Minutes</label><br />
-        <input
-          id="durationMinutes"
-          type="number"
-          min="0"
-          max="59"
-          step="1"
-          value="0"
-          style="width: 70px"
-        />
+            <label for="durationMinutes" style="font-size: 0.85rem; margin-bottom: 4px;">Minutes</label>
+            <input id="durationMinutes" type="number" min="0" max="59" step="1" value="0" />
+          </div>
+        </div>
+        <small id="durationStatus" class="status-text"></small>
       </div>
-    </div>
-
-    <small id="durationStatus"></small>
 
     <hr />
 
-    <div style="display: flex; align-items: center; gap: 10px">
+      <div class="form-section">
+        <div class="section-header">
       <strong>Progress Pay</strong>
-      <label style="font-weight: normal">
+          <div class="checkbox-wrapper">
         <input id="progressPayEnabled" type="checkbox" checked />
-        Enable
-      </label>
+            <label for="progressPayEnabled" style="margin: 0; font-weight: normal;">Enable</label>
+          </div>
     </div>
 
     <p id="noProgressPayText" style="display: none; margin-top: 8px">
@@ -95,27 +509,31 @@
 
     <div id="progressPayBody">
       <div id="progressMilestones"></div>
-      <div style="display: flex; gap: 10px; align-items: center">
+          <div class="button-group">
         <button id="addMilestoneButton" type="button">Add Milestone</button>
         <button id="deleteMilestoneButton" type="button" style="display: none">
           Delete Milestone
         </button>
       </div>
-      <small id="ppStatus"></small>
+          <small id="ppStatus" class="status-text"></small>
     </div>
+        <div class="button-group">
     <button id="saveMilestonesButton" type="button">Save</button>
     <button id="editMilestonesButton" type="button" style="display: none">
       Edit
     </button>
+        </div>
+      </div>
 
     <hr />
 
-    <div style="display: flex; align-items: center; gap: 10px">
+      <div class="form-section">
+        <div class="section-header">
       <strong>All-or-Nothing Pay</strong>
-      <label style="font-weight: normal">
+          <div class="checkbox-wrapper">
         <input id="aonPayEnabled" type="checkbox" checked />
-        Enable
-      </label>
+            <label for="aonPayEnabled" style="margin: 0; font-weight: normal;">Enable</label>
+          </div>
     </div>
 
     <p id="noAonPayText" style="display: none; margin-top: 8px">
@@ -124,28 +542,26 @@
 
     <div id="aonPayBody">
       <div id="aonRewards"></div>
-
-      <div style="display: flex; gap: 10px; align-items: center">
+          <div class="button-group">
         <button id="addAonRewardButton" type="button">Add Reward</button>
-
         <button id="deleteAonRewardButton" type="button" style="display: none">
           Delete Reward
         </button>
       </div>
-
-      <small id="aonStatus"></small>
+          <small id="aonStatus" class="status-text"></small>
     </div>
-
+        <div class="button-group">
     <button id="saveAonRewardButton" type="button">Save</button>
-
     <button id="editAonRewardsButton" type="button" style="display: none">
       Edit
     </button>
+        </div>
+      </div>
 
     <hr />
 
-    <div style="margin-top: 12px">
-      <div style="font-size: 12px; opacity: 0.7; margin-bottom: 6px">
+      <div class="graph-container">
+        <div style="font-size: 0.875rem; color: #37474F; margin-bottom: 12px; font-weight: 600;">
         Total payout graph (Progress + All-or-Nothing)
       </div>
 
@@ -153,23 +569,12 @@
         id="payoutGraph"
         width="680"
         height="220"
-        style="border: 1px solid #ddd; border-radius: 10px"
       ></svg>
+
+        <div class="slider-container">
+          <div class="slider-label">
+            <span>Views: <span id="sliderViewsLabel">0</span></span>
     </div>
-
-    <div style="margin-top: 10px">
-      <label
-        style="
-          display: block;
-          font-size: 12px;
-          opacity: 0.8;
-          margin-bottom: 6px;
-        "
-      >
-        Views:
-        <span id="sliderViewsLabel">0</span>
-      </label>
-
       <input
         id="viewsSlider"
         type="range"
@@ -177,24 +582,42 @@
         max="100"
         step="1"
         value="0"
-        style="width: 680px"
       />
-
-      <div style="margin-top: 8px; font-size: 13px">
+          <div class="payout-display">
         Earned so far: <strong><span id="sliderPayoutLabel">$0</span></strong>
+          </div>
       </div>
     </div>
 
-    <div style="margin-top: 14px">
+      <div class="submit-section">
       <button id="sendForReviewButton" type="button">
         Send pact for review
       </button>
       <small
         id="sendForReviewStatus"
-        style="display: block; margin-top: 6px"
+          class="status-text"
       ></small>
+      </div>
     </div>
 
+    <div id="fireworks-container"></div>
+    <div id="music-player-container"></div>
+
+    <script type="module">
+      import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
+      import { initMusic } from './music.js';
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          initLoadingScreen();
+          initCursorBackground();
+          initMusic();
+        });
+      } else {
+        initLoadingScreen();
+        initCursorBackground();
+        initMusic();
+      }
+    </script>
     <script type="module" src="./pactory.js"></script>
   </body>
 </html>

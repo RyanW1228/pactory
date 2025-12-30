@@ -2,20 +2,157 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pact View</title>
+    <link rel="stylesheet" href="./loading-screen.css" />
+    <link rel="stylesheet" href="./fireworks.css" />
+    <link rel="stylesheet" href="./music.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        background: linear-gradient(135deg, #F0F7FF 0%, #E3F2FD 50%, #D1E7FF 100%);
+        min-height: 100vh;
+        padding: 24px;
+        color: #1E3A5F;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        padding: 48px;
+        box-shadow: 0 4px 24px rgba(25, 118, 210, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+        position: relative;
+        z-index: 1;
+        border: 1px solid rgba(33, 150, 243, 0.1);
+      }
+
+      button {
+        background: #1976D2;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+        letter-spacing: 0.01em;
+        margin-bottom: 24px;
+      }
+
+      button:hover:not(:disabled) {
+        background: #1565C0;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.25);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(25, 118, 210, 0.2);
+      }
+
+      button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      h1 {
+        font-size: 1.875rem;
+        background: linear-gradient(135deg, #1565C0, #1976D2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+        margin-bottom: 24px;
+      }
+
+      #content {
+        margin-top: 24px;
+      }
+
+      details {
+        margin-top: 24px;
+        background: #FFFFFF;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      }
+
+      summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: #1E3A5F;
+        font-size: 1rem;
+        padding: 8px 0;
+        list-style: none;
+      }
+
+      summary:hover {
+        color: #1565C0;
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      #replacedPactBody {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(33, 150, 243, 0.12);
+      }
+    </style>
   </head>
   <body>
-    <button id="backButton">Back</button>
-    <h1 id="title">Pact</h1>
+    <div class="container">
+      <button id="backButton">Back</button>
+      <h1 id="title">Pact</h1>
 
-    <div id="content" style="margin-top: 12px"></div>
-    <details id="replacedPactDetails" style="margin-top: 16px; display: none">
-      <summary style="cursor: pointer; font-weight: 600">
-        View replaced pact
-      </summary>
-      <div id="replacedPactBody" style="margin-top: 12px"></div>
-    </details>
+      <div id="content"></div>
+      <details id="replacedPactDetails" style="display: none">
+        <summary>View replaced pact</summary>
+        <div id="replacedPactBody"></div>
+      </details>
+    </div>
 
+    <div id="fireworks-container"></div>
+    <div id="music-player-container"></div>
+
+    <script type="module">
+      import { initLoadingScreen, initCursorBackground } from './loading-screen.js';
+      import { initMusic } from './music.js';
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          initLoadingScreen();
+          initCursorBackground();
+          initMusic();
+        });
+      } else {
+        initLoadingScreen();
+        initCursorBackground();
+        initMusic();
+      }
+    </script>
     <script type="module" src="./pact-view.js"></script>
   </body>
 </html>

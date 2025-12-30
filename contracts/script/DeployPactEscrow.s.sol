@@ -6,10 +6,11 @@ import "../src/PactEscrow.sol";
 
 contract DeployPactEscrow is Script {
     function run() external {
-        // MNEE token (Sepolia mock)
-        address mnee = 0x249E2dCF1C601B3fE319A2E7A5465A41c03C3eaF;
+        // ✅ Use your real deployed MockMNEE address
+        address mnee = 0x5D74F51bD1b03E8F7742538647cf7ce369c91582;
 
-        // backend/verifier signer address (the public address that will sign payouts)
+        // ✅ Backend/verifier PUBLIC address (NOT private key)
+        // Must match the "Verifier address:" printed by your server
         address verifier = vm.envAddress("VERIFIER_ADDRESS");
 
         vm.startBroadcast();

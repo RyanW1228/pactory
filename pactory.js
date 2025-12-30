@@ -1,6 +1,11 @@
-import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
-import { PactEscrowABI } from "./pactEscrowAbi.js";
+import { ethers } from "./frontend/ethers-6.7.esm.min.js";
+import {
+  RPC_URL,
+  MNEE_ADDRESS,
+  PACT_ESCROW_ADDRESS,
+} from "./frontend/constants.js";
+import { PactEscrowABI } from "./frontend/pactEscrowAbi.js";
+import { triggerFireworks } from "./frontend/fireworks.js";
 
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -69,9 +74,8 @@ if (!sendForReviewButton) {
 function setSendStatus(msg, ok = false) {
   if (!sendForReviewStatus) return;
   sendForReviewStatus.innerText = msg || "";
-  sendForReviewStatus.className = ok
-    ? "status-text status-ok"
-    : "status-text status-error";
+  sendForReviewStatus.className =
+    "status-text " + (ok ? "status-ok" : "status-error");
 }
 
 //const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
@@ -288,48 +292,46 @@ function renderProgressMilestones() {
       const rateText = impliedRateText(i);
 
       return `
-        <div style="display:flex; align-items:center; gap:16px; margin-bottom:10px;">
-          <div style="width:90px; font-weight:600;">
-            Milestone ${i + 1}
+        <div class="milestone-row">
+          <div class="milestone-label">Milestone ${i + 1}</div>
+
+          <div class="milestone-inputs">
+            <div>
+              <label style="font-size: 0.85rem; margin-bottom: 4px;">Views</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value="${m.views}"
+                data-index="${i}"
+                data-field="views"
+                ${ro}
+                ${dis}
+              />
+            </div>
+
+            <div>
+              <label style="font-size: 0.85rem; margin-bottom: 4px;">Total Payout ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value="${m.payout}"
+                data-index="${i}"
+                data-field="payout"
+                ${ro}
+                ${dis}
+              />
+            </div>
           </div>
 
-          <div>
-            <label>Views</label><br />
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value="${m.views}"
-              data-index="${i}"
-              data-field="views"
-              style="width:120px;"
-              ${ro}
-              ${dis}
-            />
-          </div>
-
-          <div>
-            <label>Total Payout ($)</label><br />
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value="${m.payout}"
-              data-index="${i}"
-              data-field="payout"
-              style="width:120px;"
-              ${ro}
-              ${dis}
-            />
-          </div>
-
-          <div style="min-width:260px;">
+          <div class="rate-display">
             ${
               i === 0
-                ? `<div style="font-size:12px; opacity:0.7;">Implied rate</div>`
+                ? `<div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">Implied rate</div>`
                 : `<div style="height:14px;"></div>`
             }
-            <div id="rate-${i}" style="font-weight:600;">
+            <div id="rate-${i}" style="font-weight:600; color: #0277BD;">
               ${rateText || "-"}
             </div>
           </div>
@@ -442,44 +444,42 @@ function renderAonRewards() {
       const rewardText = aonRewardText(i);
 
       return `
-        <div style="display:flex; align-items:center; gap:16px; margin-bottom:10px;">
-          <div style="width:90px; font-weight:600;">
-            Reward ${i + 1}
+        <div class="reward-row">
+          <div class="milestone-label">Reward ${i + 1}</div>
+
+          <div class="milestone-inputs">
+            <div>
+              <label style="font-size: 0.85rem; margin-bottom: 4px;">Views</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value="${m.views}"
+                data-index="${i}"
+                data-field="views"
+                ${ro}
+                ${dis}
+              />
+            </div>
+
+            <div>
+              <label style="font-size: 0.85rem; margin-bottom: 4px;">Reward Payout ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value="${m.payout}"
+                data-index="${i}"
+                data-field="payout"
+                ${ro}
+                ${dis}
+              />
+            </div>
           </div>
 
-          <div>
-            <label>Views</label><br />
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value="${m.views}"
-              data-index="${i}"
-              data-field="views"
-              style="width:120px;"
-              ${ro}
-              ${dis}
-            />
-          </div>
-
-          <div>
-            <label>Reward Payout ($)</label><br />
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value="${m.payout}"
-              data-index="${i}"
-              data-field="payout"
-              style="width:120px;"
-              ${ro}
-              ${dis}
-            />
-          </div>
-
-          <div style="min-width:320px;">
-            <div style="font-size:12px; opacity:0.7;">Reward</div>
-            <div id="aon-reward-${i}" style="font-weight:600;">
+          <div class="rate-display" style="min-width: 320px;">
+            <div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">Reward</div>
+            <div id="aon-reward-${i}" style="font-weight:600; color: #0277BD;">
               ${rewardText || "-"}
             </div>
           </div>
@@ -693,16 +693,12 @@ function renderPayoutGraph() {
   payoutGraph.innerHTML += `
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${
     padT + innerH
-  }" stroke="#64B5F6" stroke-width="2"/>
+  }" stroke="#999"/>
     <line x1="${padL}" y1="${padT + innerH}" x2="${padL + innerW}" y2="${
     padT + innerH
-  }" stroke="#64B5F6" stroke-width="2"/>
-    <text x="${padL}" y="${
-    h - 10
-  }" font-size="12" fill="#0277BD" font-weight="600">views</text>
-    <text x="10" y="${
-      padT + 12
-    }" font-size="12" fill="#0277BD" font-weight="600">payout</text>
+  }" stroke="#999"/>
+    <text x="${padL}" y="${h - 10}" font-size="11" fill="#666">views</text>
+    <text x="10" y="${padT + 12}" font-size="11" fill="#666">payout</text>
   `;
 
   const keys = collectKeyViewsWithInfinity();
@@ -710,15 +706,8 @@ function renderPayoutGraph() {
   const hasAnyThreshold = keys.some((k) => k !== 0 && k !== X_INF);
   if (!hasAnyThreshold) {
     payoutGraph.innerHTML += `
-      <text x="${w / 2}" y="${
-      h / 2
-    }" font-size="14" fill="#64B5F6" text-anchor="middle" font-weight="500" opacity="0.7">
-        Enter milestone/reward view thresholds to see the graph
-      </text>
-      <text x="${w / 2}" y="${
-      h / 2 + 20
-    }" font-size="11" fill="#90CAF9" text-anchor="middle" opacity="0.6">
-        📊 Your payout visualization will appear here
+      <text x="${padL + 10}" y="${padT + 22}" font-size="12" fill="#999">
+        Enter milestone/reward view thresholds to see the graph.
       </text>
     `;
 
@@ -767,12 +756,10 @@ function renderPayoutGraph() {
     const y = sy(yVal);
 
     payoutGraph.innerHTML += `
-      <line x1="${
-        padL - 4
-      }" y1="${y}" x2="${padL}" y2="${y}" stroke="#90CAF9" stroke-width="1.5"/>
+      <line x1="${padL - 4}" y1="${y}" x2="${padL}" y2="${y}" stroke="#999"/>
       <text x="${padL - 8}" y="${
       y + 3
-    }" font-size="11" fill="#1565C0" font-weight="500" text-anchor="end">
+    }" font-size="10" fill="#666" text-anchor="end">
         ${formatMoneyTick(yVal)}
       </text>
     `;
@@ -795,119 +782,29 @@ function renderPayoutGraph() {
     if (!showIdx.has(i)) return;
     const x = sx(k);
     payoutGraph.innerHTML += `
-      <line x1="${x}" y1="${axisY}" x2="${x}" y2="${
-      axisY + 6
-    }" stroke="#90CAF9" stroke-width="1.5"/>
+      <line x1="${x}" y1="${axisY}" x2="${x}" y2="${axisY + 6}" stroke="#999"/>
       <text x="${x}" y="${
       axisY + 20
-    }" font-size="11" fill="#1565C0" font-weight="500" text-anchor="middle">
+    }" font-size="10" fill="#666" text-anchor="middle">
         ${formatXKey(k)}
       </text>
     `;
   });
 
-  // Create gradients for the line and area
-  let defs = payoutGraph.querySelector("defs");
-  if (!defs) {
-    defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    payoutGraph.appendChild(defs);
-  }
-
-  const gradientId = "payout-gradient";
-  if (!payoutGraph.querySelector(`#${gradientId}`)) {
-    const gradient = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "linearGradient"
-    );
-    gradient.id = gradientId;
-    gradient.setAttribute("x1", "0%");
-    gradient.setAttribute("y1", "0%");
-    gradient.setAttribute("x2", "0%");
-    gradient.setAttribute("y2", "100%");
-
-    const stop1 = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "stop"
-    );
-    stop1.setAttribute("offset", "0%");
-    stop1.setAttribute("stop-color", "#2196F3");
-    stop1.setAttribute("stop-opacity", "1");
-
-    const stop2 = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "stop"
-    );
-    stop2.setAttribute("offset", "100%");
-    stop2.setAttribute("stop-color", "#42A5F5");
-    stop2.setAttribute("stop-opacity", "1");
-
-    gradient.appendChild(stop1);
-    gradient.appendChild(stop2);
-    defs.appendChild(gradient);
-  }
-
-  const areaGradientId = "area-gradient";
-  if (!payoutGraph.querySelector(`#${areaGradientId}`)) {
-    const areaGradient = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "linearGradient"
-    );
-    areaGradient.id = areaGradientId;
-    areaGradient.setAttribute("x1", "0%");
-    areaGradient.setAttribute("y1", "0%");
-    areaGradient.setAttribute("x2", "0%");
-    areaGradient.setAttribute("y2", "100%");
-
-    const stop1 = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "stop"
-    );
-    stop1.setAttribute("offset", "0%");
-    stop1.setAttribute("stop-color", "#2196F3");
-    stop1.setAttribute("stop-opacity", "0.2");
-
-    const stop2 = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "stop"
-    );
-    stop2.setAttribute("offset", "100%");
-    stop2.setAttribute("stop-color", "#42A5F5");
-    stop2.setAttribute("stop-opacity", "0.05");
-
-    areaGradient.appendChild(stop1);
-    areaGradient.appendChild(stop2);
-    defs.appendChild(areaGradient);
-  }
-
-  // Create area fill path
-  let areaPath = `M ${sx(pts[0].k)} ${padT + innerH} L ${sx(pts[0].k)} ${sy(
-    pts[0].yAfter
-  )} `;
-  let linePath = `M ${sx(pts[0].k)} ${sy(pts[0].yAfter)} `;
+  let d = `M ${sx(pts[0].k)} ${sy(pts[0].yAfter)} `;
 
   for (let i = 1; i < pts.length; i++) {
     const cur = pts[i];
     const xCur = sx(cur.k);
 
-    linePath += `L ${xCur} ${sy(cur.yBefore)} `;
-    areaPath += `L ${xCur} ${sy(cur.yBefore)} `;
+    d += `L ${xCur} ${sy(cur.yBefore)} `;
 
     if (Math.abs(cur.yAfter - cur.yBefore) > 1e-9) {
-      linePath += `L ${xCur} ${sy(cur.yAfter)} `;
-      areaPath += `L ${xCur} ${sy(cur.yAfter)} `;
+      d += `L ${xCur} ${sy(cur.yAfter)} `;
     }
   }
 
-  // Close the area path
-  const lastX = sx(pts[pts.length - 1].k);
-  areaPath += `L ${lastX} ${padT + innerH} Z`;
-
-  // Add filled area
-  payoutGraph.innerHTML += `<path d="${areaPath}" fill="url(#area-gradient)" opacity="0.6"/>`;
-
-  let d = linePath;
-
-  payoutGraph.innerHTML += `<path d="${d}" fill="none" stroke="url(#${gradientId})" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  payoutGraph.innerHTML += `<path d="${d}" fill="none" stroke="#333" stroke-width="2"/>`;
 
   if (viewsSlider) {
     const v = Number(viewsSlider.value || 0);
@@ -937,9 +834,8 @@ function renderPayoutGraph() {
     payoutGraph.innerHTML += `
       <line x1="${xMarker}" y1="${padT}" x2="${xMarker}" y2="${
       padT + innerH
-    }" stroke="#2196F3" stroke-dasharray="4 4" stroke-width="2" opacity="0.6"/>
-      <circle cx="${xMarker}" cy="${yMarker}" r="6" fill="#2196F3" stroke="white" stroke-width="2" opacity="0.9"/>
-      <circle cx="${xMarker}" cy="${yMarker}" r="3" fill="white"/>
+    }" stroke="#888" stroke-dasharray="4 4"/>
+      <circle cx="${xMarker}" cy="${yMarker}" r="4" fill="#333"/>
     `;
   }
 
@@ -1017,6 +913,7 @@ function validateCounterparty() {
 
   if (!value) {
     counterpartyStatus.innerText = "";
+    counterpartyStatus.className = "status-text";
     return false;
   }
 
@@ -1024,16 +921,18 @@ function validateCounterparty() {
     counterpartyStatus.innerText = `Invalid ${
       role === "sponsor" ? "Creator" : "Sponsor"
     } address`;
-
+    counterpartyStatus.className = "status-text status-error";
     return false;
   }
 
   if (value.toLowerCase() === address.toLowerCase()) {
     counterpartyStatus.innerText = `${otherParty} cannot be your own address`;
+    counterpartyStatus.className = "status-text status-error";
     return false;
   }
 
   counterpartyStatus.innerText = `✓ Valid ${otherParty} address`;
+  counterpartyStatus.className = "status-text status-ok";
   return true;
 }
 
@@ -1044,30 +943,36 @@ function validateDuration() {
 
   if (![d, h, m].every(Number.isInteger)) {
     durationStatus.innerText = "Duration values must be integers";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (d < 0 || h < 0 || m < 0) {
     durationStatus.innerText = "Duration values cannot be negative";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (h > 23) {
     durationStatus.innerText = "Hours must be between 0 and 23";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (m > 59) {
     durationStatus.innerText = "Minutes must be between 0 and 59";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (d === 0 && h === 0 && m === 0) {
     durationStatus.innerText = "Duration must be greater than 0";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   durationStatus.innerText = "✓ Valid duration";
+  durationStatus.className = "status-text status-ok";
   return true;
 }
 
@@ -1197,82 +1102,21 @@ function validateAonRewardsAndExplain() {
   return { ok: true, msg: "✓ Rewards look good." };
 }
 
-function getMetaMaskProviderOrAlert() {
-  const eth = window.ethereum;
-  if (!eth) {
-    alert("No injected wallet found (window.ethereum missing).");
-    return null;
-  }
-
-  // If multiple providers exist, pick MetaMask explicitly
-  if (Array.isArray(eth.providers) && eth.providers.length > 0) {
-    const mm = eth.providers.find((p) => p && p.isMetaMask);
-    if (mm) return mm;
-
-    alert(
-      "Multiple wallets detected, but MetaMask provider was not found.\n\n" +
-        "Disable other wallet extensions (like Yours Wallet) or enable MetaMask."
-    );
-    return null;
-  }
-
-  // Single provider case
-  if (eth.isMetaMask) return eth;
-
-  alert(
-    "A wallet is installed, but it is not MetaMask.\n\n" +
-      "Please disable other wallet extensions (like Yours Wallet) or enable MetaMask."
-  );
-  return null;
-}
-
 async function verifyEthOwnershipOrAlert() {
-  const eth = getMetaMaskProviderOrAlert();
-  if (!eth) return false;
-
-  // helper: timeout wrapper
-  const withTimeout = (p, ms, label) =>
-    Promise.race([
-      p,
-      new Promise((_, rej) =>
-        setTimeout(() => rej(new Error(`${label} timed out`)), ms)
-      ),
-    ]);
-
-  // 1) Try get existing accounts (no popup)
-  let accounts;
-  try {
-    accounts = await withTimeout(
-      eth.request({ method: "eth_accounts" }),
-      8000,
-      "eth_accounts"
-    );
-  } catch (e) {
-    alert(`Wallet check failed: ${e?.message || e}`);
+  if (!window.ethereum) {
+    alert("MetaMask not found. Install MetaMask to verify.");
     return false;
   }
 
-  // 2) If not connected, request connect (popup)
-  if (!accounts || accounts.length === 0) {
-    try {
-      accounts = await withTimeout(
-        eth.request({ method: "eth_requestAccounts" }),
-        30000,
-        "MetaMask connect"
-      );
-    } catch (e) {
-      alert(
-        `Wallet connect failed (popup may be blocked, MetaMask may be locked, or request pending):\n\n${
-          e?.message || e
-        }`
-      );
-      return false;
-    }
-  }
+  const browserProvider = new ethers.BrowserProvider(window.ethereum);
 
+  const accounts = await window.ethereum.request({
+    method: "eth_requestAccounts",
+  });
   const selected = (accounts?.[0] || "").toLowerCase();
+
   if (!selected) {
-    alert("No wallet selected.");
+    alert("No wallet selected in MetaMask.");
     return false;
   }
 
@@ -1283,7 +1127,8 @@ async function verifyEthOwnershipOrAlert() {
     return false;
   }
 
-  // Build message (same as your current code)
+  const signer = await browserProvider.getSigner();
+
   const role = getRole(address);
   const counterparty = counterpartyInput.value.trim();
   const durationSec =
@@ -1303,22 +1148,11 @@ async function verifyEthOwnershipOrAlert() {
     `Nonce: ${nonce}\n` +
     `IssuedAt: ${issuedAt}`;
 
-  // 3) Sign (popup)
   let signature;
   try {
-    const browserProvider = new ethers.BrowserProvider(eth);
-    const signer = await browserProvider.getSigner();
-    signature = await withTimeout(
-      signer.signMessage(message),
-      60000,
-      "MetaMask signature"
-    );
-  } catch (e) {
-    alert(
-      `Signature failed (MetaMask may be locked, popup blocked, or request pending):\n\n${
-        e?.message || e
-      }`
-    );
+    signature = await signer.signMessage(message);
+  } catch {
+    alert("Signature was rejected. Verification failed.");
     return false;
   }
 
@@ -1330,17 +1164,16 @@ async function verifyEthOwnershipOrAlert() {
 
   localStorage.setItem(`pactVerifySig:${address.toLowerCase()}`, signature);
   localStorage.setItem(`pactVerifyMsg:${address.toLowerCase()}`, message);
+
   return true;
 }
 
 async function initContracts() {
-  const eth = getMetaMaskProviderOrAlert();
-  if (!eth) throw new Error("MetaMask not available.");
-
-  provider = new ethers.BrowserProvider(eth);
+  provider = new ethers.BrowserProvider(window.ethereum);
   signer = await provider.getSigner();
 
   escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, signer);
+
   mnee = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
 }
 
@@ -1441,6 +1274,7 @@ addMilestoneButton.onclick = () => {
 
   if (progressMilestones.length >= MAX_MILESTONES) {
     ppStatus.innerText = "Maximum of 10 milestones reached.";
+    ppStatus.className = "status-text status-error";
     return;
   }
 
@@ -1465,11 +1299,13 @@ saveMilestonesButton.onclick = () => {
   const result = validateMilestonesAndExplain();
   if (!result.ok) {
     ppStatus.innerText = result.msg;
+    ppStatus.className = "status-text status-error";
     return;
   }
 
   milestonesLocked = true;
   ppStatus.innerText = "✓ Saved. Progress Pay is locked.";
+  ppStatus.className = "status-text status-ok";
   renderProgressMilestones();
   updateMilestoneControlsVisibility();
   renderPayoutGraph();
@@ -1509,6 +1345,7 @@ addAonRewardButton.onclick = () => {
 
   if (aonRewards.length >= MAX_MILESTONES) {
     aonStatus.innerText = "Maximum of 10 rewards reached.";
+    aonStatus.className = "status-text status-error";
     return;
   }
 
@@ -1540,6 +1377,7 @@ saveAonRewardButton.onclick = () => {
 
   aonRewardsLocked = true;
   aonStatus.innerText = "✓ Saved. All-or-Nothing Pay is locked.";
+  aonStatus.className = "status-text status-ok";
   renderAonRewards();
   updateAonRewardControlsVisibility();
   renderPayoutGraph();
@@ -1559,7 +1397,8 @@ viewsSlider?.addEventListener("input", () => {
 });
 
 sendForReviewButton.onclick = async () => {
-  setSendStatus("");
+  alert("Send for review clicked");
+  setSendStatus("Clicked. Starting...", true);
 
   // lock UI
   sendForReviewButton.disabled = true;
@@ -1700,17 +1539,39 @@ sendForReviewButton.onclick = async () => {
     // success
     if (data?.pactId) {
       setPactName(address, data.pactId, pactName);
-      // Show fireworks on successful pact creation
-      try {
-        const { showFireworks } = await import("./fireworks.js");
-        showFireworks();
-      } catch (e) {
-        console.log("Fireworks not available:", e);
-      }
     }
 
     setSendStatus("✓ Successfully saved. Redirecting...", true);
-    window.location.replace("./pacts-dashboard.html");
+
+    // Build an ABSOLUTE url so there is zero path ambiguity
+    const dashboardUrl = `${window.location.origin}/frontend/pacts-dashboard.html`;
+
+    // PROVE the timer fires (no console logs)
+    setTimeout(() => {
+      alert("Redirecting now...");
+      window.location.assign(dashboardUrl);
+    }, 1200);
+
+    // Fireworks should never block anything
+    try {
+      triggerFireworks();
+    } catch {
+      // do nothing
+    }
+    return;
+
+    // Always redirect (guaranteed)
+    setTimeout(() => {
+      window.location.href = "./pacts-dashboard.html";
+    }, 2000);
+
+    // Fireworks should never block redirect (no console)
+    try {
+      triggerFireworks();
+    } catch {
+      // do nothing
+    }
+
     return;
   } finally {
     // unlock UI (won’t matter if redirect happens)

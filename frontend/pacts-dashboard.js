@@ -114,7 +114,7 @@ function renderSections(mode) {
       const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       return `
         <details class="section">
-          <summary><strong>${title}</strong> <span id="count-${id}">(0)</span></summary>
+          <summary><strong>${title}</strong><span id="count-${id}" class="count-badge">(0)</span></summary>
           <div id="list-${id}" class="list">
             <p class="empty">No pacts yet.</p>
           </div>

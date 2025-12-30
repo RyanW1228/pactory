@@ -1,0 +1,295 @@
+/* Loading Screen Styles */
+#loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  transition: opacity 0.5s ease-out;
+}
+
+.loader-content {
+  text-align: center;
+  position: relative;
+}
+
+/* Add a subtle glow around the penguin container */
+.penguin-container::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+/* Cute GIF Penguin - Bigger */
+.penguin-container {
+  position: relative;
+  width: 500px;
+  height: 500px;
+  margin: 0 auto 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.penguin-gif {
+  width: 450px;
+  height: auto;
+  max-width: 100%;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.15)) 
+          drop-shadow(0 8px 20px rgba(33, 150, 243, 0.25));
+  animation: penguin-float 3s ease-in-out infinite;
+  image-rendering: high-quality;
+  object-fit: contain;
+}
+
+@keyframes penguin-float {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-8px) scale(1.02);
+  }
+}
+
+/* Snowflakes */
+.snowflake {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 24px;
+  animation: snowfall 4s linear infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.snowflake:nth-child(2) {
+  left: 10%;
+  animation-delay: 0s;
+  animation-duration: 4s;
+  font-size: 20px;
+}
+
+.snowflake:nth-child(3) {
+  left: 30%;
+  animation-delay: 0.5s;
+  animation-duration: 5s;
+  font-size: 18px;
+}
+
+.snowflake:nth-child(4) {
+  left: 60%;
+  animation-delay: 1s;
+  animation-duration: 4.5s;
+  font-size: 22px;
+}
+
+.snowflake:nth-child(5) {
+  left: 80%;
+  animation-delay: 1.5s;
+  animation-duration: 5.5s;
+  font-size: 19px;
+}
+
+.snowflake:nth-child(6) {
+  left: 50%;
+  animation-delay: 2s;
+  animation-duration: 4s;
+  font-size: 21px;
+}
+
+@keyframes snowfall {
+  0% {
+    transform: translateY(-100px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(400px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Loader Text */
+.loader-text {
+  font-size: 2.25rem;
+  font-weight: 600;
+  color: #1565C0;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #1976D2, #42A5F5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: text-glow 2s ease-in-out infinite;
+}
+
+@keyframes text-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.loader-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.loader-dots span {
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+  border-radius: 50%;
+  animation: dot-bounce 1.4s ease-in-out infinite;
+}
+
+.loader-dots span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loader-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loader-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: translateY(-15px);
+    opacity: 1;
+  }
+}
+
+/* Cursor Background Effect - More Visible */
+#cursor-background {
+  position: fixed;
+  top: -100%;
+  left: -100%;
+  width: 300%;
+  height: 300%;
+  background: 
+    radial-gradient(
+      circle 500px at center,
+      rgba(255, 255, 255, 0.15) 0%,
+      rgba(187, 222, 251, 0.08) 30%,
+      rgba(144, 202, 249, 0.04) 60%,
+      transparent 100%
+    );
+  pointer-events: none;
+  z-index: -1;
+  will-change: background-position;
+  transition: background-position 0.3s ease-out;
+}
+
+/* Enhanced animated background pattern */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.12) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(187, 222, 251, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(144, 202, 249, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 60% 70%, rgba(227, 242, 253, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -2;
+  animation: background-shift 25s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+@keyframes background-shift {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(30px, 20px) scale(1.05);
+  }
+  50% {
+    transform: translate(-20px, 30px) scale(0.95);
+  }
+  75% {
+    transform: translate(20px, -20px) scale(1.02);
+  }
+}
+
+/* Additional subtle moving elements */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle 2px at 10% 20%, rgba(255, 255, 255, 0.3) 0%, transparent 50%),
+    radial-gradient(circle 2px at 90% 60%, rgba(255, 255, 255, 0.25) 0%, transparent 50%),
+    radial-gradient(circle 1.5px at 50% 80%, rgba(255, 255, 255, 0.2) 0%, transparent 50%),
+    radial-gradient(circle 2px at 30% 40%, rgba(255, 255, 255, 0.3) 0%, transparent 50%);
+  background-size: 200% 200%;
+  pointer-events: none;
+  z-index: -2;
+  animation: sparkle-move 20s linear infinite;
+  opacity: 0.4;
+}
+
+@keyframes sparkle-move {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+/* Interactive sparkles - Behind content but visible */
+.sparkle.interactive-sparkle {
+  position: fixed !important;
+  width: 6px !important;
+  height: 6px !important;
+  background: rgba(255, 255, 255, 1) !important;
+  border-radius: 50% !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  box-shadow: 
+    0 0 10px rgba(255, 255, 255, 1),
+    0 0 20px rgba(255, 255, 255, 0.8),
+    0 0 30px rgba(255, 255, 255, 0.5),
+    0 0 40px rgba(144, 202, 249, 0.3) !important;
+  transition: transform 0.1s ease-out !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
