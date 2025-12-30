@@ -69,7 +69,9 @@ if (!sendForReviewButton) {
 function setSendStatus(msg, ok = false) {
   if (!sendForReviewStatus) return;
   sendForReviewStatus.innerText = msg || "";
-  sendForReviewStatus.className = ok ? "status-text status-ok" : "status-text status-error";
+  sendForReviewStatus.className = ok
+    ? "status-text status-ok"
+    : "status-text status-error";
 }
 
 //const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
@@ -695,8 +697,12 @@ function renderPayoutGraph() {
     <line x1="${padL}" y1="${padT + innerH}" x2="${padL + innerW}" y2="${
     padT + innerH
   }" stroke="#64B5F6" stroke-width="2"/>
-    <text x="${padL}" y="${h - 10}" font-size="12" fill="#0277BD" font-weight="600">views</text>
-    <text x="10" y="${padT + 12}" font-size="12" fill="#0277BD" font-weight="600">payout</text>
+    <text x="${padL}" y="${
+    h - 10
+  }" font-size="12" fill="#0277BD" font-weight="600">views</text>
+    <text x="10" y="${
+      padT + 12
+    }" font-size="12" fill="#0277BD" font-weight="600">payout</text>
   `;
 
   const keys = collectKeyViewsWithInfinity();
@@ -704,10 +710,14 @@ function renderPayoutGraph() {
   const hasAnyThreshold = keys.some((k) => k !== 0 && k !== X_INF);
   if (!hasAnyThreshold) {
     payoutGraph.innerHTML += `
-      <text x="${w / 2}" y="${h / 2}" font-size="14" fill="#64B5F6" text-anchor="middle" font-weight="500" opacity="0.7">
+      <text x="${w / 2}" y="${
+      h / 2
+    }" font-size="14" fill="#64B5F6" text-anchor="middle" font-weight="500" opacity="0.7">
         Enter milestone/reward view thresholds to see the graph
       </text>
-      <text x="${w / 2}" y="${h / 2 + 20}" font-size="11" fill="#90CAF9" text-anchor="middle" opacity="0.6">
+      <text x="${w / 2}" y="${
+      h / 2 + 20
+    }" font-size="11" fill="#90CAF9" text-anchor="middle" opacity="0.6">
         📊 Your payout visualization will appear here
       </text>
     `;
@@ -757,7 +767,9 @@ function renderPayoutGraph() {
     const y = sy(yVal);
 
     payoutGraph.innerHTML += `
-      <line x1="${padL - 4}" y1="${y}" x2="${padL}" y2="${y}" stroke="#90CAF9" stroke-width="1.5"/>
+      <line x1="${
+        padL - 4
+      }" y1="${y}" x2="${padL}" y2="${y}" stroke="#90CAF9" stroke-width="1.5"/>
       <text x="${padL - 8}" y="${
       y + 3
     }" font-size="11" fill="#1565C0" font-weight="500" text-anchor="end">
@@ -783,7 +795,9 @@ function renderPayoutGraph() {
     if (!showIdx.has(i)) return;
     const x = sx(k);
     payoutGraph.innerHTML += `
-      <line x1="${x}" y1="${axisY}" x2="${x}" y2="${axisY + 6}" stroke="#90CAF9" stroke-width="1.5"/>
+      <line x1="${x}" y1="${axisY}" x2="${x}" y2="${
+      axisY + 6
+    }" stroke="#90CAF9" stroke-width="1.5"/>
       <text x="${x}" y="${
       axisY + 20
     }" font-size="11" fill="#1565C0" font-weight="500" text-anchor="middle">
@@ -793,62 +807,82 @@ function renderPayoutGraph() {
   });
 
   // Create gradients for the line and area
-  let defs = payoutGraph.querySelector('defs');
+  let defs = payoutGraph.querySelector("defs");
   if (!defs) {
-    defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
     payoutGraph.appendChild(defs);
   }
-  
-  const gradientId = 'payout-gradient';
+
+  const gradientId = "payout-gradient";
   if (!payoutGraph.querySelector(`#${gradientId}`)) {
-    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    const gradient = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "linearGradient"
+    );
     gradient.id = gradientId;
-    gradient.setAttribute('x1', '0%');
-    gradient.setAttribute('y1', '0%');
-    gradient.setAttribute('x2', '0%');
-    gradient.setAttribute('y2', '100%');
-    
-    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop1.setAttribute('offset', '0%');
-    stop1.setAttribute('stop-color', '#2196F3');
-    stop1.setAttribute('stop-opacity', '1');
-    
-    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop2.setAttribute('offset', '100%');
-    stop2.setAttribute('stop-color', '#42A5F5');
-    stop2.setAttribute('stop-opacity', '1');
-    
+    gradient.setAttribute("x1", "0%");
+    gradient.setAttribute("y1", "0%");
+    gradient.setAttribute("x2", "0%");
+    gradient.setAttribute("y2", "100%");
+
+    const stop1 = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "stop"
+    );
+    stop1.setAttribute("offset", "0%");
+    stop1.setAttribute("stop-color", "#2196F3");
+    stop1.setAttribute("stop-opacity", "1");
+
+    const stop2 = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "stop"
+    );
+    stop2.setAttribute("offset", "100%");
+    stop2.setAttribute("stop-color", "#42A5F5");
+    stop2.setAttribute("stop-opacity", "1");
+
     gradient.appendChild(stop1);
     gradient.appendChild(stop2);
     defs.appendChild(gradient);
   }
-  
-  const areaGradientId = 'area-gradient';
+
+  const areaGradientId = "area-gradient";
   if (!payoutGraph.querySelector(`#${areaGradientId}`)) {
-    const areaGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    const areaGradient = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "linearGradient"
+    );
     areaGradient.id = areaGradientId;
-    areaGradient.setAttribute('x1', '0%');
-    areaGradient.setAttribute('y1', '0%');
-    areaGradient.setAttribute('x2', '0%');
-    areaGradient.setAttribute('y2', '100%');
-    
-    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop1.setAttribute('offset', '0%');
-    stop1.setAttribute('stop-color', '#2196F3');
-    stop1.setAttribute('stop-opacity', '0.2');
-    
-    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop2.setAttribute('offset', '100%');
-    stop2.setAttribute('stop-color', '#42A5F5');
-    stop2.setAttribute('stop-opacity', '0.05');
-    
+    areaGradient.setAttribute("x1", "0%");
+    areaGradient.setAttribute("y1", "0%");
+    areaGradient.setAttribute("x2", "0%");
+    areaGradient.setAttribute("y2", "100%");
+
+    const stop1 = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "stop"
+    );
+    stop1.setAttribute("offset", "0%");
+    stop1.setAttribute("stop-color", "#2196F3");
+    stop1.setAttribute("stop-opacity", "0.2");
+
+    const stop2 = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "stop"
+    );
+    stop2.setAttribute("offset", "100%");
+    stop2.setAttribute("stop-color", "#42A5F5");
+    stop2.setAttribute("stop-opacity", "0.05");
+
     areaGradient.appendChild(stop1);
     areaGradient.appendChild(stop2);
     defs.appendChild(areaGradient);
   }
 
   // Create area fill path
-  let areaPath = `M ${sx(pts[0].k)} ${padT + innerH} L ${sx(pts[0].k)} ${sy(pts[0].yAfter)} `;
+  let areaPath = `M ${sx(pts[0].k)} ${padT + innerH} L ${sx(pts[0].k)} ${sy(
+    pts[0].yAfter
+  )} `;
   let linePath = `M ${sx(pts[0].k)} ${sy(pts[0].yAfter)} `;
 
   for (let i = 1; i < pts.length; i++) {
@@ -863,14 +897,14 @@ function renderPayoutGraph() {
       areaPath += `L ${xCur} ${sy(cur.yAfter)} `;
     }
   }
-  
+
   // Close the area path
   const lastX = sx(pts[pts.length - 1].k);
   areaPath += `L ${lastX} ${padT + innerH} Z`;
-  
+
   // Add filled area
   payoutGraph.innerHTML += `<path d="${areaPath}" fill="url(#area-gradient)" opacity="0.6"/>`;
-  
+
   let d = linePath;
 
   payoutGraph.innerHTML += `<path d="${d}" fill="none" stroke="url(#${gradientId})" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -1163,21 +1197,82 @@ function validateAonRewardsAndExplain() {
   return { ok: true, msg: "✓ Rewards look good." };
 }
 
+function getMetaMaskProviderOrAlert() {
+  const eth = window.ethereum;
+  if (!eth) {
+    alert("No injected wallet found (window.ethereum missing).");
+    return null;
+  }
+
+  // If multiple providers exist, pick MetaMask explicitly
+  if (Array.isArray(eth.providers) && eth.providers.length > 0) {
+    const mm = eth.providers.find((p) => p && p.isMetaMask);
+    if (mm) return mm;
+
+    alert(
+      "Multiple wallets detected, but MetaMask provider was not found.\n\n" +
+        "Disable other wallet extensions (like Yours Wallet) or enable MetaMask."
+    );
+    return null;
+  }
+
+  // Single provider case
+  if (eth.isMetaMask) return eth;
+
+  alert(
+    "A wallet is installed, but it is not MetaMask.\n\n" +
+      "Please disable other wallet extensions (like Yours Wallet) or enable MetaMask."
+  );
+  return null;
+}
+
 async function verifyEthOwnershipOrAlert() {
-  if (!window.ethereum) {
-    alert("MetaMask not found. Install MetaMask to verify.");
+  const eth = getMetaMaskProviderOrAlert();
+  if (!eth) return false;
+
+  // helper: timeout wrapper
+  const withTimeout = (p, ms, label) =>
+    Promise.race([
+      p,
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error(`${label} timed out`)), ms)
+      ),
+    ]);
+
+  // 1) Try get existing accounts (no popup)
+  let accounts;
+  try {
+    accounts = await withTimeout(
+      eth.request({ method: "eth_accounts" }),
+      8000,
+      "eth_accounts"
+    );
+  } catch (e) {
+    alert(`Wallet check failed: ${e?.message || e}`);
     return false;
   }
 
-  const browserProvider = new ethers.BrowserProvider(window.ethereum);
+  // 2) If not connected, request connect (popup)
+  if (!accounts || accounts.length === 0) {
+    try {
+      accounts = await withTimeout(
+        eth.request({ method: "eth_requestAccounts" }),
+        30000,
+        "MetaMask connect"
+      );
+    } catch (e) {
+      alert(
+        `Wallet connect failed (popup may be blocked, MetaMask may be locked, or request pending):\n\n${
+          e?.message || e
+        }`
+      );
+      return false;
+    }
+  }
 
-  const accounts = await window.ethereum.request({
-    method: "eth_requestAccounts",
-  });
   const selected = (accounts?.[0] || "").toLowerCase();
-
   if (!selected) {
-    alert("No wallet selected in MetaMask.");
+    alert("No wallet selected.");
     return false;
   }
 
@@ -1188,8 +1283,7 @@ async function verifyEthOwnershipOrAlert() {
     return false;
   }
 
-  const signer = await browserProvider.getSigner();
-
+  // Build message (same as your current code)
   const role = getRole(address);
   const counterparty = counterpartyInput.value.trim();
   const durationSec =
@@ -1209,11 +1303,22 @@ async function verifyEthOwnershipOrAlert() {
     `Nonce: ${nonce}\n` +
     `IssuedAt: ${issuedAt}`;
 
+  // 3) Sign (popup)
   let signature;
   try {
-    signature = await signer.signMessage(message);
-  } catch {
-    alert("Signature was rejected. Verification failed.");
+    const browserProvider = new ethers.BrowserProvider(eth);
+    const signer = await browserProvider.getSigner();
+    signature = await withTimeout(
+      signer.signMessage(message),
+      60000,
+      "MetaMask signature"
+    );
+  } catch (e) {
+    alert(
+      `Signature failed (MetaMask may be locked, popup blocked, or request pending):\n\n${
+        e?.message || e
+      }`
+    );
     return false;
   }
 
@@ -1225,17 +1330,18 @@ async function verifyEthOwnershipOrAlert() {
 
   localStorage.setItem(`pactVerifySig:${address.toLowerCase()}`, signature);
   localStorage.setItem(`pactVerifyMsg:${address.toLowerCase()}`, message);
-
   return true;
 }
 
 async function initContracts() {
-  provider = new ethers.BrowserProvider(window.ethereum);
+  const eth = getMetaMaskProviderOrAlert();
+  if (!eth) throw new Error("MetaMask not available.");
+
+  provider = new ethers.BrowserProvider(eth);
   signer = await provider.getSigner();
 
   escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, signer);
-
-  mnee = new ethers.Contract(MNEE_ADDRESS, ERC20ABI, signer);
+  mnee = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
 }
 
 // Handlers
@@ -1596,10 +1702,10 @@ sendForReviewButton.onclick = async () => {
       setPactName(address, data.pactId, pactName);
       // Show fireworks on successful pact creation
       try {
-        const { showFireworks } = await import('./fireworks.js');
+        const { showFireworks } = await import("./fireworks.js");
         showFireworks();
       } catch (e) {
-        console.log('Fireworks not available:', e);
+        console.log("Fireworks not available:", e);
       }
     }
 

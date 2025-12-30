@@ -24,16 +24,15 @@ export const PactEscrowABI = [
   },
   {
     type: "function",
-    name: "createPact",
+    name: "createPactWithSig",
     inputs: [
+      { name: "sponsor", type: "address", internalType: "address" },
       { name: "pactId", type: "uint256", internalType: "uint256" },
       { name: "creator", type: "address", internalType: "address" },
       { name: "maxPayout", type: "uint256", internalType: "uint256" },
-      {
-        name: "durationSeconds",
-        type: "uint256",
-        internalType: "uint256",
-      },
+      { name: "durationSeconds", type: "uint256", internalType: "uint256" },
+      { name: "expiry", type: "uint256", internalType: "uint256" },
+      { name: "sig", type: "bytes", internalType: "bytes" },
     ],
     outputs: [],
     stateMutability: "nonpayable",
