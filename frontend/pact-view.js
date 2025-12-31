@@ -5,6 +5,7 @@ const API_BASE = "http://localhost:3000";
 import { ethers } from "./ethers-6.7.esm.min.js";
 import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
+import { showSecondaryLoadingScreen, hideSecondaryLoadingScreen } from "./loading-screen.js";
 
 // 🔁 Reload page if MetaMask network or account changes
 if (window.ethereum) {
@@ -433,104 +434,125 @@ if (canApproveAndFund) {
       fundBtn.style.opacity = "0.7";
       fundBtn.style.cursor = "not-allowed";
 
-      // ✅ 5) get signer (MetaMask) AFTER checks
-      const signer = await browserProvider.getSigner();
+      // Show loading screen
+      showSecondaryLoadingScreen();
 
-      // sanity: make sure the connected wallet matches the logged-in address
-      const signerAddr = await signer.getAddress();
-      if (normAddr(signerAddr) !== normAddr(address)) {
-        alert(
-          `MetaMask account mismatch.\n\n` +
-            `Logged in as: ${address}\n` +
-            `MetaMask is: ${signerAddr}\n\n` +
-            `Switch accounts in MetaMask and try again.`
+      try {
+        // ✅ 5) get signer (MetaMask) AFTER checks
+        const signer = await browserProvider.getSigner();
+
+        // sanity: make sure the connected wallet matches the logged-in address
+        const signerAddr = await signer.getAddress();
+        if (normAddr(signerAddr) !== normAddr(address)) {
+          // Hide loading screen on early return
+          hideSecondaryLoadingScreen();
+          alert(
+            `MetaMask account mismatch.\n\n` +
+              `Logged in as: ${address}\n` +
+              `MetaMask is: ${signerAddr}\n\n` +
+              `Switch accounts in MetaMask and try again.`
+          );
+          fundBtn.disabled = false;
+          fundBtn.style.opacity = "1";
+          fundBtn.style.cursor = "pointer";
+          return;
+        }
+
+        const escrow = new ethers.Contract(
+          PACT_ESCROW_ADDRESS,
+          PactEscrowABI,
+          signer
         );
+
+        const ERC20_ABI = [
+          "function approve(address spender, uint256 amount) returns (bool)",
+          "function allowance(address owner, address spender) view returns (uint256)",
+        ];
+        const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
+
+        // ✅ 6) create pact on-chain IF it doesn't exist yet
+        let onchain = null;
+        try {
+          onchain = await escrow.pacts(id);
+        } catch {}
+
+        const sponsorOnchain = onchain?.sponsor ? String(onchain.sponsor) : "";
+        const exists =
+          sponsorOnchain &&
+          sponsorOnchain !== "0x0000000000000000000000000000000000000000";
+
+        if (!exists) {
+          // get backend signature for createPactWithSig
+          const sigRes = await fetch(
+            `${API_BASE}/api/pacts/${encodeURIComponent(id)}/create-sig`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                address, // sponsor logged-in address
+                tokenDecimals: Number(decimals),
+                escrowAddress: PACT_ESCROW_ADDRESS,
+                chainId: 11155111,
+              }),
+            }
+          );
+
+          const sigData = await sigRes.json().catch(() => ({}));
+          if (!sigRes.ok || !sigData.ok) {
+            throw new Error(sigData?.error || "Failed to fetch create signature");
+          }
+
+          // sanity: backend signed the same maxPayout you computed
+          const backendMax = BigInt(sigData.maxPayoutRaw);
+          if (backendMax !== needRaw) {
+            throw new Error(
+              `Max payout mismatch.\nFrontend: ${needRaw}\nBackend: ${backendMax}`
+            );
+          }
+
+          const txCreate = await escrow.createPactWithSig(
+            sigData.sponsor,
+            id,
+            sigData.creator,
+            backendMax,
+            sigData.durationSeconds,
+            sigData.expiry,
+            sigData.sig
+          );
+          await txCreate.wait();
+        }
+
+        // ✅ 7) approve IF needed (avoid unnecessary tx)
+        const allowance = await token.allowance(address, PACT_ESCROW_ADDRESS);
+        if (allowance < needRaw) {
+          const txApprove = await token.approve(PACT_ESCROW_ADDRESS, needRaw);
+          await txApprove.wait();
+        }
+
+        // ✅ 8) fund(pactId) — contract pulls pact.maxPayout
+        const txFund = await escrow.fund(id);
+        await txFund.wait();
+
+        alert("✅ Pact created (if needed) + approved + funded successfully!");
+
+        localStorage.setItem("pactsNeedsRefresh", "1");
+        // Hide loading screen before reload
+        hideSecondaryLoadingScreen();
+        // Small delay to ensure loading screen hides before reload
+        setTimeout(() => {
+          window.location.reload();
+        }, 350);
+      } catch (e) {
+        // Hide loading screen on error
+        hideSecondaryLoadingScreen();
+        alert(`Approve/Fund failed:\n\n${e?.shortMessage || e?.message || e}`);
         fundBtn.disabled = false;
         fundBtn.style.opacity = "1";
         fundBtn.style.cursor = "pointer";
-        return;
       }
-
-      const escrow = new ethers.Contract(
-        PACT_ESCROW_ADDRESS,
-        PactEscrowABI,
-        signer
-      );
-
-      const ERC20_ABI = [
-        "function approve(address spender, uint256 amount) returns (bool)",
-        "function allowance(address owner, address spender) view returns (uint256)",
-      ];
-      const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
-
-      // ✅ 6) create pact on-chain IF it doesn't exist yet
-      let onchain = null;
-      try {
-        onchain = await escrow.pacts(id);
-      } catch {}
-
-      const sponsorOnchain = onchain?.sponsor ? String(onchain.sponsor) : "";
-      const exists =
-        sponsorOnchain &&
-        sponsorOnchain !== "0x0000000000000000000000000000000000000000";
-
-      if (!exists) {
-        // get backend signature for createPactWithSig
-        const sigRes = await fetch(
-          `${API_BASE}/api/pacts/${encodeURIComponent(id)}/create-sig`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              address, // sponsor logged-in address
-              tokenDecimals: Number(decimals),
-              escrowAddress: PACT_ESCROW_ADDRESS,
-              chainId: 11155111,
-            }),
-          }
-        );
-
-        const sigData = await sigRes.json().catch(() => ({}));
-        if (!sigRes.ok || !sigData.ok) {
-          throw new Error(sigData?.error || "Failed to fetch create signature");
-        }
-
-        // sanity: backend signed the same maxPayout you computed
-        const backendMax = BigInt(sigData.maxPayoutRaw);
-        if (backendMax !== needRaw) {
-          throw new Error(
-            `Max payout mismatch.\nFrontend: ${needRaw}\nBackend: ${backendMax}`
-          );
-        }
-
-        const txCreate = await escrow.createPactWithSig(
-          sigData.sponsor,
-          id,
-          sigData.creator,
-          backendMax,
-          sigData.durationSeconds,
-          sigData.expiry,
-          sigData.sig
-        );
-        await txCreate.wait();
-      }
-
-      // ✅ 7) approve IF needed (avoid unnecessary tx)
-      const allowance = await token.allowance(address, PACT_ESCROW_ADDRESS);
-      if (allowance < needRaw) {
-        const txApprove = await token.approve(PACT_ESCROW_ADDRESS, needRaw);
-        await txApprove.wait();
-      }
-
-      // ✅ 8) fund(pactId) — contract pulls pact.maxPayout
-      const txFund = await escrow.fund(id);
-      await txFund.wait();
-
-      alert("✅ Pact created (if needed) + approved + funded successfully!");
-
-      localStorage.setItem("pactsNeedsRefresh", "1");
-      window.location.reload();
     } catch (e) {
+      // Outer catch for any errors before the inner try block
+      hideSecondaryLoadingScreen();
       alert(`Approve/Fund failed:\n\n${e?.shortMessage || e?.message || e}`);
       fundBtn.disabled = false;
       fundBtn.style.opacity = "1";
@@ -558,6 +580,7 @@ if (canNegotiate) {
   negotiateBtn.innerText = "Negotiate Pact";
 
   negotiateBtn.style.marginTop = "10px";
+  negotiateBtn.style.marginRight = "10px";
   negotiateBtn.style.background = "#2c3e50";
   negotiateBtn.style.color = "white";
   negotiateBtn.style.padding = "8px 14px";
@@ -581,6 +604,7 @@ if (canAccept) {
 
   acceptBtn.style.marginTop = "10px";
   acceptBtn.style.marginLeft = "10px";
+  acceptBtn.style.marginRight = "10px";
   acceptBtn.style.background = "#1f7a1f";
   acceptBtn.style.color = "white";
   acceptBtn.style.padding = "8px 14px";
@@ -639,7 +663,8 @@ if (actionLabel) {
   btn.type = "button";
   btn.innerText = actionLabel;
 
-  btn.style.marginTop = "16px";
+  btn.style.marginTop = "10px";
+  btn.style.marginLeft = "10px";
   btn.style.background = "#c0392b";
   btn.style.color = "white";
   btn.style.padding = "8px 14px";

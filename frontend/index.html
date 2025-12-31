@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="./loading-screen.css" />
     <link rel="stylesheet" href="./fireworks.css" />
     <link rel="stylesheet" href="./music.css" />
+    <link rel="stylesheet" href="./walkthrough.css" />
     <style>
       * {
         margin: 0;
@@ -358,6 +359,49 @@
       .secondary-btn:hover:not(:disabled) {
         background: #455a64;
       }
+
+      .environment-section {
+        background: #F5F9FF;
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        border: 1px solid rgba(33, 150, 243, 0.12);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .environment-selector {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .mint-btn {
+        background: #FF9800;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 2px 4px rgba(255, 152, 0, 0.2);
+      }
+
+      .mint-btn:hover:not(:disabled) {
+        background: #F57C00;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+      }
+
+      .mint-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -390,11 +434,23 @@
         </label>
       </div>
 
+      <div class="environment-section">
+        <div class="environment-selector">
+          <span class="info-label">Environment:</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="environmentToggle">
+            <span class="toggle-slider"></span>
+          </label>
+          <span id="environmentText" class="info-value" style="margin-left: 12px; font-weight: 600;">Testing</span>
+        </div>
+        <button id="mintMockMNEEButton" class="mint-btn" style="display: none;">Mint Mock MNEE</button>
+      </div>
+
       <button id="connectButton" class="primary-btn">Connect Wallet</button>
+      <button id="viewPactsButton" class="primary-btn">View Pacts</button>
       <button id="logoutButton" class="secondary-btn" style="display: none">
         Logout
       </button>
-      <button id="viewPactsButton" class="primary-btn">View Pacts</button>
     </div>
 
     <div id="fireworks-container"></div>
@@ -407,6 +463,7 @@
         initSecondaryLoadingScreen,
       } from "./loading-screen.js";
       import { initMusic } from "./music.js";
+      import { initWalkthrough } from "./walkthrough.js";
       // Initialize immediately, don't wait
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => {
@@ -414,12 +471,14 @@
           initSecondaryLoadingScreen();
           initCursorBackground();
           initMusic();
+          initWalkthrough();
         });
       } else {
         initLoadingScreen();
         initSecondaryLoadingScreen();
         initCursorBackground();
         initMusic();
+        initWalkthrough();
       }
     </script>
     <!-- Confirmation Modal -->

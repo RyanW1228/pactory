@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="./loading-screen.css" />
     <link rel="stylesheet" href="./fireworks.css" />
     <link rel="stylesheet" href="./music.css" />
+    <link rel="stylesheet" href="./walkthrough.css" />
     <style>
       * {
         margin: 0;
@@ -844,18 +845,21 @@
     <script type="module">
       import { initLoadingScreen, initCursorBackground, initSecondaryLoadingScreen } from './loading-screen.js';
       import { initMusic } from './music.js';
+      import { initWalkthrough } from './walkthrough.js';
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
           initLoadingScreen();
           initSecondaryLoadingScreen();
           initCursorBackground();
           initMusic();
+          initWalkthrough();
         });
       } else {
         initLoadingScreen();
         initSecondaryLoadingScreen();
         initCursorBackground();
         initMusic();
+        initWalkthrough();
       }
     </script>
     <!-- Confirmation Modal -->

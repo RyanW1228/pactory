@@ -1,23 +1,53 @@
-// Background music player
+// Background music player with playlist support
 let backgroundMusic = null;
 let isMusicEnabled = false;
 let musicInitialized = false;
 let pendingUserGesturePlay = false;
+let currentTrackIndex = 0;
 
-// Save playback position before page unload
+// Playlist - tracks will play in order and loop
+const playlist = [
+  "./assets/music/Up - Married Life.mp3",
+  "./assets/music/Merry-Go-Round of Life - Howl's Moving Castle [Piano]  Joe Hisaishi.mp3",
+  "./assets/music/18. The Flower Garden.mp3"
+];
+
+// Preload all tracks to prevent buffering
+const preloadedTracks = [];
+
+// Save playback state before page unload
 window.addEventListener("beforeunload", () => {
   if (backgroundMusic && !backgroundMusic.paused) {
     localStorage.setItem(
       "pactory-music-time",
       backgroundMusic.currentTime.toString()
     );
+    localStorage.setItem("pactory-music-track", currentTrackIndex.toString());
     localStorage.setItem("pactory-music-enabled", "true");
   }
 });
 
+// Preload tracks to prevent buffering
+function preloadTracks() {
+  playlist.forEach((src, index) => {
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = src;
+    preloadedTracks[index] = audio;
+    
+    // Preload the audio - start loading immediately
+    audio.load();
+    
+    // Pre-fetch the audio data
+    audio.addEventListener("canplaythrough", () => {
+      console.log(`🎵 Track ${index + 1} preloaded`);
+    }, { once: true });
+  });
+}
+
 export function initMusic() {
-  // Only initialize once per page load
-  if (musicInitialized) {
+  // Only initialize once globally (not per page) - reuse existing audio if available
+  if (musicInitialized && backgroundMusic) {
     // Just update the button state if music should be playing
     const musicPreference = localStorage.getItem("pactory-music-enabled");
     if (
@@ -26,21 +56,62 @@ export function initMusic() {
       !backgroundMusic.paused
     ) {
       updateButtonState(true);
+    } else {
+      // Update button state based on preference
+      updateButtonState(musicPreference === "true");
     }
+    // Ensure button exists
+    createMusicControl();
     return;
   }
 
   musicInitialized = true;
 
+  // Preload all tracks
+  preloadTracks();
+
   // Create audio element
   backgroundMusic = new Audio();
+  backgroundMusic.preload = "auto";
 
-  // Load the music file
-  backgroundMusic.src = "./assets/music/Up - Married Life.mp3";
+  // Restore track index and position
+  const savedTrackIndex = localStorage.getItem("pactory-music-track");
+  if (savedTrackIndex) {
+    const index = parseInt(savedTrackIndex, 10);
+    if (!isNaN(index) && index >= 0 && index < playlist.length) {
+      currentTrackIndex = index;
+    }
+  }
+
+  // Load the current track
+  loadTrack(currentTrackIndex);
 
   // Set music properties
-  backgroundMusic.loop = true;
   backgroundMusic.volume = 0.3; // 30% volume - subtle background music
+
+  // Handle track ending - move to next track
+  backgroundMusic.addEventListener("ended", () => {
+    console.log(`🎵 Track ${currentTrackIndex + 1} ended, moving to next`);
+    playNextTrack();
+  });
+  
+  // Preload next track while current is playing to prevent buffering
+  let preloadScheduled = false;
+  backgroundMusic.addEventListener("timeupdate", () => {
+    // When track is 80% through, preload next track
+    if (!preloadScheduled && backgroundMusic.duration > 0) {
+      const progress = backgroundMusic.currentTime / backgroundMusic.duration;
+      if (progress > 0.8) {
+        preloadScheduled = true;
+        const nextIndex = (currentTrackIndex + 1) % playlist.length;
+        if (preloadedTracks[nextIndex]) {
+          // Ensure next track is fully loaded
+          preloadedTracks[nextIndex].load();
+          console.log(`🎵 Preloading track ${nextIndex + 1}`);
+        }
+      }
+    }
+  });
 
   // Restore playback position if music was playing on previous page
   const savedTime = localStorage.getItem("pactory-music-time");
@@ -52,8 +123,12 @@ export function initMusic() {
       backgroundMusic.addEventListener(
         "loadeddata",
         () => {
-          backgroundMusic.currentTime = time;
-          console.log(`🎵 Music restored to ${time.toFixed(2)}s`);
+          // Only restore if we're on the same track
+          const savedTrack = localStorage.getItem("pactory-music-track");
+          if (savedTrack && parseInt(savedTrack, 10) === currentTrackIndex) {
+            backgroundMusic.currentTime = Math.min(time, backgroundMusic.duration - 0.5);
+            console.log(`🎵 Music restored to track ${currentTrackIndex + 1}, ${time.toFixed(2)}s`);
+          }
         },
         { once: true }
       );
@@ -62,7 +137,7 @@ export function initMusic() {
 
   // Handle music loading
   backgroundMusic.addEventListener("loadeddata", () => {
-    console.log("🎵 Music loaded successfully");
+    console.log(`🎵 Track ${currentTrackIndex + 1} loaded successfully`);
   });
 
   backgroundMusic.addEventListener("error", (e) => {
@@ -86,6 +161,57 @@ export function initMusic() {
 
   // Create music control button
   createMusicControl();
+}
+
+function loadTrack(index) {
+  if (index < 0 || index >= playlist.length) {
+    currentTrackIndex = 0; // Loop back to start
+    index = 0;
+  }
+  
+  currentTrackIndex = index;
+  
+  // Use preloaded track if available to prevent buffering
+  if (preloadedTracks[index] && preloadedTracks[index].readyState >= 2) {
+    // Use the preloaded audio's src
+    backgroundMusic.src = preloadedTracks[index].src;
+  } else {
+    backgroundMusic.src = playlist[index];
+  }
+  backgroundMusic.load(); // Force load the new source
+}
+
+function playNextTrack() {
+  const nextIndex = (currentTrackIndex + 1) % playlist.length;
+  loadTrack(nextIndex);
+  
+  // Wait for track to load before playing to prevent buffering
+  const playWhenReady = () => {
+    if (isMusicEnabled) {
+      const playPromise = backgroundMusic.play();
+      if (playPromise && typeof playPromise.then === "function") {
+        playPromise
+          .then(() => {
+            console.log(`🎵 Now playing track ${currentTrackIndex + 1}`);
+          })
+          .catch((err) => {
+            console.log("Error playing next track:", err);
+          });
+      }
+    }
+  };
+  
+  if (backgroundMusic.readyState >= 2) {
+    // Already loaded, play immediately
+    playWhenReady();
+  } else {
+    // Wait for track to load
+    backgroundMusic.addEventListener("canplay", playWhenReady, { once: true });
+  }
+  
+  // Save current track
+  localStorage.setItem("pactory-music-track", currentTrackIndex.toString());
+  localStorage.removeItem("pactory-music-time"); // Clear time when switching tracks
 }
 
 function createMusicControl() {
@@ -155,12 +281,29 @@ function enableMusic() {
     return;
   }
 
-  const playPromise = backgroundMusic.play();
+  // Ensure track is loaded before playing
+  if (backgroundMusic.readyState < 2) {
+    // Wait for track to be ready
+    backgroundMusic.addEventListener(
+      "canplay",
+      () => {
+        const playPromise = backgroundMusic.play();
+        handlePlayPromise(playPromise);
+      },
+      { once: true }
+    );
+  } else {
+    // Track is ready, play immediately
+    const playPromise = backgroundMusic.play();
+    handlePlayPromise(playPromise);
+  }
+}
 
+function handlePlayPromise(playPromise) {
   if (playPromise && typeof playPromise.then === "function") {
     playPromise
       .then(() => {
-        console.log("🎵 Music is playing");
+        console.log(`🎵 Track ${currentTrackIndex + 1} is playing`);
         isMusicEnabled = true;
         pendingUserGesturePlay = false;
         localStorage.setItem("pactory-music-enabled", "true");
@@ -172,16 +315,26 @@ function enableMusic() {
           err
         );
 
-        // IMPORTANT: do NOT mark as enabled yet (prevents the “double click” bug)
+        // IMPORTANT: do NOT mark as enabled yet (prevents the "double click" bug)
         isMusicEnabled = false;
         pendingUserGesturePlay = true;
 
         localStorage.setItem("pactory-music-enabled", "true");
 
-        // Show OFF state (or you can make a “tap to enable” state if you want)
+        // Show OFF state (or you can make a "tap to enable" state if you want)
         updateButtonState(false);
 
-        armOneTimeGestureStart();
+        // Arm one-time gesture start - listen for any user interaction
+        const startOnGesture = () => {
+          if (pendingUserGesturePlay && !isMusicEnabled) {
+            enableMusic();
+            pendingUserGesturePlay = false;
+          }
+          document.removeEventListener("click", startOnGesture);
+          document.removeEventListener("touchstart", startOnGesture);
+        };
+        document.addEventListener("click", startOnGesture, { once: true });
+        document.addEventListener("touchstart", startOnGesture, { once: true });
       });
   }
 }

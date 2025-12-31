@@ -198,6 +198,69 @@ export function initSecondaryLoadingScreen() {
   }
 }
 
+// Show secondary loading screen programmatically (for async operations)
+export function showSecondaryLoadingScreen() {
+  // Don't create if already exists
+  if (document.getElementById("secondary-loading-screen")) return;
+  
+  // Hide content
+  const containers = document.querySelectorAll(".container");
+  containers.forEach(container => {
+    if (container) {
+      container.style.visibility = "hidden";
+      container.style.opacity = "0";
+    }
+  });
+  
+  // Create loader
+  const secondaryLoader = document.createElement("div");
+  secondaryLoader.id = "secondary-loading-screen";
+  secondaryLoader.innerHTML = `
+    <div class="loader-content">
+      <div class="penguin-container-secondary">
+        <img src="./assets/images/pengu-dancy.gif" class="penguin-gif-secondary" alt="Dancing Penguin" />
+      </div>
+      <div class="loader-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+  
+  if (document.body) {
+    document.body.insertBefore(secondaryLoader, document.body.firstChild);
+  }
+}
+
+// Hide secondary loading screen programmatically
+export function hideSecondaryLoadingScreen() {
+  const loader = document.getElementById("secondary-loading-screen");
+  if (loader) {
+    loader.style.opacity = "0";
+    setTimeout(() => {
+      if (loader.parentElement) {
+        loader.remove();
+      }
+      // Reveal content
+      const containers = document.querySelectorAll(".container");
+      containers.forEach(container => {
+        if (container) {
+          container.style.visibility = "visible";
+          container.style.opacity = "1";
+        }
+      });
+    }, 300);
+  } else {
+    // If loader wasn't found, just reveal content
+    const containers = document.querySelectorAll(".container");
+    containers.forEach(container => {
+      if (container) {
+        container.style.visibility = "visible";
+        container.style.opacity = "1";
+      }
+    });
+  }
+}
+
 // Enhanced sparkles with mouse interaction
 const sparkles = [];
 let sparklesInitialized = false;

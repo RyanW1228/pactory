@@ -1,5 +1,5 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { MNEE_ADDRESS, RPC_URL } from "./constants.js";
+import { MNEE_ADDRESS, RPC_URL, getMNEEAddress, getEnvironment, MOCK_MNEE_CONTRACT_ADDRESS } from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
 
 const ESCROW_ADDRESS = "0xCB1ab619DC66DB20186bABABA7bEa2b2D3079Ecc";  // deployed testnet address
@@ -21,10 +21,21 @@ const toggleDefaultModeButton = document.getElementById(
   "toggleDefaultModeButton"
 ); // Now a checkbox input
 
+const environmentToggle = document.getElementById("environmentToggle");
+const environmentText = document.getElementById("environmentText");
+const mintMockMNEEButton = document.getElementById("mintMockMNEEButton");
+
 // ABI (minimal)
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",
+];
+
+// MockMNEE ABI (includes mint function)
+const MOCK_MNEE_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function mint(address to, uint256 amount) external",
 ];
 
 function viewModeKey(address) {
@@ -51,7 +62,9 @@ async function showBalances(provider, address) {
   const ethWei = await provider.getBalance(address);
   balanceSpan.innerText = ethers.formatEther(ethWei);
 
-  const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
+  // Use current environment's MNEE address
+  const mneeAddress = getMNEEAddress();
+  const token = new ethers.Contract(mneeAddress, ERC20_ABI, provider);
   const [raw, decimals] = await Promise.all([
     token.balanceOf(address),
     token.decimals(),
@@ -101,8 +114,10 @@ async function setupContracts(params) {
     PactEscrowABI,
     signer);
 
+  // Use current environment's MNEE address
+  const mneeAddress = getMNEEAddress();
   mnee = new ethers.Contract(
-    MNEE_ADDRESS, ERC20ABI, signer
+    mneeAddress, ERC20ABI, signer
   );
 
 
@@ -137,6 +152,93 @@ async function loadFromLocalStorage() {
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   await showBalances(provider, stored);
   renderDefaultModeUI(stored);
+}
+
+// Environment management
+function updateEnvironmentUI() {
+  const env = getEnvironment();
+  if (environmentToggle) {
+    environmentToggle.checked = env === "production";
+  }
+  if (environmentText) {
+    environmentText.textContent = env === "production" ? "Production" : "Testing";
+  }
+  if (mintMockMNEEButton) {
+    mintMockMNEEButton.style.display = env === "testing" ? "block" : "none";
+  }
+}
+
+// Initialize environment UI when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    if (environmentToggle) {
+      updateEnvironmentUI();
+    }
+  });
+} else {
+  if (environmentToggle) {
+    updateEnvironmentUI();
+  }
+}
+
+// Environment toggle handler
+if (environmentToggle) {
+  environmentToggle.onchange = () => {
+    const newEnv = environmentToggle.checked ? "production" : "testing";
+    localStorage.setItem("pactory-environment", newEnv);
+    updateEnvironmentUI();
+    
+    // Reload page to apply new environment (addresses need to be updated)
+    if (confirm(`Switch to ${newEnv === "production" ? "Production" : "Testing"} environment? This will reload the page.`)) {
+      window.location.reload();
+    } else {
+      // Revert toggle if user cancels
+      environmentToggle.checked = !environmentToggle.checked;
+      updateEnvironmentUI();
+    }
+  };
+}
+
+// Mint Mock MNEE function
+async function mintMockMNEE() {
+  if (!signer) {
+    alert("Please connect your wallet first.");
+    return;
+  }
+
+  const address = await signer.getAddress();
+  const amount = ethers.parseUnits("1000", 18); // Mint 1000 Mock MNEE
+
+  try {
+    mintMockMNEEButton.disabled = true;
+    mintMockMNEEButton.textContent = "Minting...";
+
+    const mockMNEE = new ethers.Contract(MOCK_MNEE_CONTRACT_ADDRESS, MOCK_MNEE_ABI, signer);
+    
+    const tx = await mockMNEE.mint(address, amount);
+    mintMockMNEEButton.textContent = "Confirming...";
+    
+    await tx.wait();
+    
+    alert(`Successfully minted 1000 Mock MNEE! Transaction: ${tx.hash}`);
+    mintMockMNEEButton.textContent = "Mint Mock MNEE";
+    
+    // Refresh balance
+    if (mneeBalanceSpan) {
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      await showBalances(provider, address);
+    }
+  } catch (error) {
+    console.error("Mint error:", error);
+    alert(`Failed to mint Mock MNEE: ${error.message}`);
+    mintMockMNEEButton.textContent = "Mint Mock MNEE";
+  } finally {
+    mintMockMNEEButton.disabled = false;
+  }
+}
+
+if (mintMockMNEEButton) {
+  mintMockMNEEButton.onclick = () => mintMockMNEE();
 }
 
 
@@ -271,24 +373,28 @@ if (document.readyState === "loading") {
 }
 
 // Toggle switch handler
-toggleDefaultModeButton.onchange = () => {
-  const addr = localStorage.getItem("address");
-  if (!addr) {
-    console.warn("Address not set, cannot switch mode");
-    const current = getDefaultMode(addr || "");
-    toggleDefaultModeButton.checked = current === "creator";
-    return;
-  }
+if (toggleDefaultModeButton) {
+  toggleDefaultModeButton.onchange = () => {
+    const addr = localStorage.getItem("address");
+    if (!addr) {
+      console.warn("Address not set, cannot switch mode");
+      const current = getDefaultMode(addr || "");
+      if (toggleDefaultModeButton) {
+        toggleDefaultModeButton.checked = current === "creator";
+      }
+      return;
+    }
 
-  const current = getDefaultMode(addr);
-  const next = current === "sponsor" ? "creator" : "sponsor";
-  
-  // Show confirmation modal
-  showModeSwitchModal(current, next);
-  
-  // Don't update the toggle state yet - wait for confirmation
-  // The toggle will be reset if user cancels
-};
+    const current = getDefaultMode(addr);
+    const next = current === "sponsor" ? "creator" : "sponsor";
+    
+    // Show confirmation modal
+    showModeSwitchModal(current, next);
+    
+    // Don't update the toggle state yet - wait for confirmation
+    // The toggle will be reset if user cancels
+  };
+}
 
 // Init
 loadFromLocalStorage().catch(() => {});

@@ -492,10 +492,60 @@ async function init() {
       window.location.href = "./pactory.html";
     });
 
+    // Initialize view switch modal
+    const viewSwitchModal = document.getElementById("viewSwitchModal");
+    const viewModalCancelBtn = document.getElementById("viewModalCancelBtn");
+    const viewModalConfirmBtn = document.getElementById("viewModalConfirmBtn");
+    const currentViewText = document.getElementById("currentViewText");
+    const nextViewText = document.getElementById("nextViewText");
+
+    function showViewSwitchModal(currentMode, nextMode) {
+      if (!viewSwitchModal || !currentViewText || !nextViewText) {
+        console.error("View switch modal elements not found");
+        // Fallback: just switch without confirmation
+        setViewMode(nextMode);
+        return;
+      }
+      currentViewText.textContent = currentMode === "sponsor" ? "Sponsor" : "Creator";
+      nextViewText.textContent = nextMode === "sponsor" ? "Sponsor" : "Creator";
+      viewSwitchModal.classList.add("show");
+      viewSwitchModal.style.display = "flex";
+    }
+
+    function hideViewSwitchModal() {
+      if (viewSwitchModal) {
+        viewSwitchModal.classList.remove("show");
+        viewSwitchModal.style.display = "none";
+      }
+    }
+
+    if (viewModalCancelBtn) {
+      viewModalCancelBtn.onclick = () => {
+        hideViewSwitchModal();
+      };
+    }
+
+    if (viewSwitchModal) {
+      viewSwitchModal.onclick = (e) => {
+        if (e.target === viewSwitchModal) {
+          hideViewSwitchModal();
+        }
+      };
+    }
+
+    if (viewModalConfirmBtn) {
+      viewModalConfirmBtn.onclick = () => {
+        const cur = getViewMode();
+        const next = cur === "sponsor" ? "creator" : "sponsor";
+        setViewMode(next);
+        hideViewSwitchModal();
+      };
+    }
+
     toggleViewButton?.addEventListener("click", () => {
       const cur = getViewMode();
       const next = cur === "sponsor" ? "creator" : "sponsor";
-      setViewMode(next);
+      showViewSwitchModal(cur, next);
     });
 
     if (!localStorage.getItem(viewModeKey(address))) {
