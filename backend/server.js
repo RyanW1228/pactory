@@ -1,10 +1,10 @@
 // server.js
 import express from "express";
 import cors from "cors";
-import Database from "better-sqlite3";
 import { ethers } from "ethers";
 import rateLimit from "express-rate-limit";
 import "dotenv/config";
+import db from "./db.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -51,62 +51,8 @@ app.use((req, res, next) => {
 });
 
 // --------------------
-// DB
+// DB (single source of truth)
 // --------------------
-const dbPath = process.env.DB_PATH || "./pacts.db";
-const db = new Database(dbPath);
-
-// --- schema ---
-db.exec(`
-CREATE TABLE IF NOT EXISTS pacts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-
-  name TEXT NOT NULL,
-
-  creator_address TEXT NOT NULL,
-  sponsor_address TEXT NOT NULL,
-
-  proposer_role TEXT NOT NULL CHECK (proposer_role IN ('sponsor','creator')),
-  proposer_address TEXT NOT NULL,
-
-  counterparty_address TEXT NOT NULL,
-
-  duration_seconds INTEGER NOT NULL,
-
-  progress_enabled INTEGER NOT NULL,
-  progress_locked INTEGER NOT NULL,
-  progress_json TEXT NOT NULL,
-
-  aon_enabled INTEGER NOT NULL,
-  aon_locked INTEGER NOT NULL,
-  aon_json TEXT NOT NULL,
-
-  status TEXT NOT NULL,
-  replaces_pact_id INTEGER, 
-
-  video_link TEXT
-);
-
-CREATE TABLE IF NOT EXISTS video_stats (
-  pact_id INTEGER PRIMARY KEY REFERENCES pacts(id) ON DELETE CASCADE,
-  platform TEXT NOT NULL,
-  video_url TEXT NOT NULL,
-
-  views INTEGER NOT NULL,
-  likes INTEGER NOT NULL,
-  comments INTEGER NOT NULL,
-
-  last_checked_at TEXT NOT NULL
-);
-
-
-
-CREATE INDEX IF NOT EXISTS idx_pacts_status ON pacts(status);
-CREATE INDEX IF NOT EXISTS idx_pacts_sponsor ON pacts(sponsor_address);
-CREATE INDEX IF NOT EXISTS idx_pacts_creator ON pacts(creator_address);
-`);
 
 // --- migration helpers ---
 function hasColumn(table, col) {
@@ -122,11 +68,19 @@ if (!hasColumn("pacts", "name")) {
 }
 
 if (!hasColumn("pacts", "replaces_pact_id")) {
-  db.exec(`ALTER TABLE pacts ADD COLUMN replaces_pact_id INTEGER`);
+  db.exec(`ALTER TABLE pacts ADD COLUMN replaces_pact_id TEXT`);
 }
 
 if (!hasColumn("pacts", "video_link")) {
   db.exec(`ALTER TABLE pacts ADD COLUMN video_link TEXT`);
+}
+
+if (!hasColumn("pacts", "active_started_at")) {
+  db.exec(`ALTER TABLE pacts ADD COLUMN active_started_at TEXT`);
+}
+
+if (!hasColumn("pacts", "active_ends_at")) {
+  db.exec(`ALTER TABLE pacts ADD COLUMN active_ends_at TEXT`);
 }
 
 // --------------------
@@ -134,6 +88,11 @@ if (!hasColumn("pacts", "video_link")) {
 // --------------------
 function nowIso() {
   return new Date().toISOString();
+}
+
+function newPactId() {
+  // random 32 bytes -> uint256 decimal string
+  return ethers.toBigInt(ethers.randomBytes(32)).toString();
 }
 
 function normAddr(a) {
@@ -158,6 +117,13 @@ function requireName(name) {
   if (!n) throw new Error("Pact name is required");
   if (n.length > 60) throw new Error("Pact name must be 60 characters or less");
   return n;
+}
+
+function requirePactIdString(id) {
+  const s = String(id || "").trim();
+  // uint256 decimal string (no signs, no decimals)
+  if (!/^\d+$/.test(s)) throw new Error("Invalid id");
+  return s;
 }
 
 function canonPayments(arr) {
@@ -250,49 +216,111 @@ function pactEquivalent(oldPactRow, incoming) {
 }
 
 async function scrapeTikTokVideo(videoUrl) {
-  const res = await fetch(
-    `https://api.apify.com/v2/acts/clockworks~tiktok-scraper/run-sync-get-dataset-items?token=${process.env.APIFY_TOKEN}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        videoUrls: [videoUrl],
-        resultsPerPage: 1,
-      }),
-    }
-  );
+  const token = process.env.APIFY_TOKEN;
+  if (!token) throw new Error("APIFY_TOKEN is missing");
+
+  const endpoint =
+    "https://api.apify.com/v2/acts/clockworks~tiktok-video-scraper/run-sync-get-dataset-items";
+
+  const res = await fetch(`${endpoint}?token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      // ✅ correct input key for this actor
+      postURLs: [videoUrl],
+      resultsPerPage: 1,
+      shouldDownloadVideos: false,
+      shouldDownloadCovers: false,
+      shouldDownloadSubtitles: false,
+      shouldDownloadSlideshowImages: false,
+    }),
+  });
+
+  // If Apify returns non-2xx, show the response text to debug quickly
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Apify HTTP ${res.status}: ${txt || res.statusText}`);
+  }
 
   const data = await res.json();
+
   if (!Array.isArray(data) || data.length === 0) {
-    throw new Error("no data returned from Apify");
+    // helpful debug: Apify sometimes returns an empty dataset when URL is malformed/unreachable
+    throw new Error("Apify returned 0 items (empty dataset)");
   }
 
   const v = data[0];
 
   return {
-    views: v.playCount ?? 0,
-    likes: v.diggCount ?? 0,
-    comments: v.commentCount ?? 0,
+    views: Number(v.playCount ?? 0),
+    likes: Number(v.diggCount ?? 0),
+    comments: Number(v.commentCount ?? 0),
   };
 }
 
 // double check math on this
 
-function calculateUnlocked(pact, views) {
-  let unlocked = 0;
+function canon(arr) {
+  return (Array.isArray(arr) ? arr : [])
+    .map((x) => ({ views: Number(x?.views), payout: Number(x?.payout) }))
+    .filter(
+      (x) =>
+        Number.isInteger(x.views) &&
+        x.views > 0 &&
+        Number.isFinite(x.payout) &&
+        x.payout > 0
+    )
+    .sort((a, b) => a.views - b.views);
+}
 
-  const progress = JSON.parse(pact.progress_json || "[]");
-  const aon = JSON.parse(pact.aon_json || "[]");
+function progressPayoutAtViewsFromRow(pactRow, x) {
+  if (!pactRow.progress_enabled) return 0;
 
-  for (const m of progress) {
-    if (views >= m.views) unlocked = Math.max(unlocked, m.payout);
+  const ms = canon(JSON.parse(pactRow.progress_json || "[]"));
+  if (ms.length === 0) return 0;
+
+  const views = Math.max(0, Number(x || 0));
+  if (views <= 0) return 0;
+
+  // if past last milestone -> last payout
+  if (views >= ms[ms.length - 1].views) return ms[ms.length - 1].payout;
+
+  // if before first milestone -> linear from 0 to first payout
+  if (views <= ms[0].views) {
+    return (views / ms[0].views) * ms[0].payout;
   }
 
-  for (const r of aon) {
-    if (views >= r.views) unlocked += r.payout;
+  // between milestones -> interpolate
+  for (let i = 1; i < ms.length; i++) {
+    const a = ms[i - 1];
+    const b = ms[i];
+    if (views <= b.views) {
+      const t = (views - a.views) / (b.views - a.views);
+      return a.payout + t * (b.payout - a.payout);
+    }
   }
 
-  return unlocked;
+  return ms[ms.length - 1].payout;
+}
+
+function aonBonusAtViewsFromRow(pactRow, x) {
+  if (!pactRow.aon_enabled) return 0;
+
+  const rewards = canon(JSON.parse(pactRow.aon_json || "[]"));
+  const views = Math.max(0, Number(x || 0));
+
+  let sum = 0;
+  for (const r of rewards) {
+    if (views >= r.views) sum += r.payout;
+  }
+  return sum;
+}
+
+function calculateUnlocked(pactRow, views) {
+  return (
+    progressPayoutAtViewsFromRow(pactRow, views) +
+    aonBonusAtViewsFromRow(pactRow, views)
+  );
 }
 
 // --------------------
@@ -361,10 +389,9 @@ app.post("/api/pacts", (req, res) => {
     let oldPact = null;
 
     if (replacesPactId != null) {
-      oldId = Number(replacesPactId);
-      if (!Number.isInteger(oldId)) throw new Error("Invalid replacesPactId");
-
+      oldId = requirePactIdString(replacesPactId);
       oldPact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(oldId);
+
       if (!oldPact) throw new Error("Old pact not found");
 
       if (normAddr(oldPact.counterparty_address) !== normAddr(proposer)) {
@@ -400,24 +427,27 @@ app.post("/api/pacts", (req, res) => {
     const creatorAddress = proposerRole === "creator" ? proposer : counterparty;
 
     const t = nowIso();
+    const pactId = newPactId();
 
     const stmt = db.prepare(`
-      INSERT INTO pacts (
-        created_at, updated_at,
-        name,
-        creator_address, sponsor_address,
-        proposer_role, proposer_address,
-        counterparty_address,
-        duration_seconds,
-        progress_enabled, progress_locked, progress_json,
-        aon_enabled, aon_locked, aon_json,
-        status,
-        replaces_pact_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+  INSERT INTO pacts (
+    id,
+    created_at, updated_at,
+    name,
+    creator_address, sponsor_address,
+    proposer_role, proposer_address,
+    counterparty_address,
+    duration_seconds,
+    progress_enabled, progress_locked, progress_json,
+    aon_enabled, aon_locked, aon_json,
+    status,
+    replaces_pact_id
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
 
     const runTx = db.transaction(() => {
       const info = stmt.run(
+        pactId, // ✅ NEW: this must be FIRST because your INSERT includes id
         t,
         t,
         pactName,
@@ -449,7 +479,7 @@ app.post("/api/pacts", (req, res) => {
     });
 
     const info = runTx();
-    res.json({ ok: true, pactId: info.lastInsertRowid });
+    res.json({ ok: true, pactId });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -512,6 +542,7 @@ app.get("/api/pacts", (req, res) => {
       .prepare(
         `SELECT id, name, created_at, sponsor_address, creator_address, status,
         proposer_address, proposer_role, video_link,
+        active_started_at, active_ends_at,
         progress_enabled, progress_json,
         aon_enabled, aon_json
          FROM pacts
@@ -531,6 +562,8 @@ app.get("/api/pacts", (req, res) => {
       proposer_address: r.proposer_address,
       proposer_role: r.proposer_role,
       video_link: r.video_link,
+      active_started_at: r.active_started_at,
+      active_ends_at: r.active_ends_at,
       max_payout_usd: computeMaxPayoutUsd(r),
     }));
 
@@ -548,10 +581,10 @@ app.get("/api/pacts", (req, res) => {
 // Read pact details (view-only page)
 app.get("/api/pacts/:id", (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) throw new Error("Invalid id");
+    const id = requirePactIdString(req.params.id);
 
     const row = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+
     if (!row) return res.status(404).json({ ok: false, error: "Not found" });
 
     const maxPayoutUsd = computeMaxPayoutUsd(row);
@@ -568,6 +601,11 @@ app.get("/api/pacts/:id", (req, res) => {
         max_payout_usd: maxPayoutUsd,
         progress_milestones: JSON.parse(row.progress_json || "[]"),
         aon_rewards: JSON.parse(row.aon_json || "[]"),
+        cached_views: row.cached_views,
+        cached_unlocked: row.cached_unlocked,
+        cached_unearned: row.cached_unearned,
+        cached_available: row.cached_available,
+        cached_stats_updated_at: row.cached_stats_updated_at,
       },
       replaced_pact: replaced
         ? {
@@ -586,8 +624,7 @@ app.get("/api/pacts/:id", (req, res) => {
 // Accept pact (counterparty approves -> moves to "created")
 app.post("/api/pacts/:id/accept", (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) throw new Error("Invalid id");
+    const id = requirePactIdString(req.params.id);
 
     const { address } = req.body || {};
     if (!address || !ethers.isAddress(address))
@@ -630,8 +667,7 @@ app.post("/api/pacts/:id/accept", (req, res) => {
 // Set video link (ONLY creator, ONLY when status='created')
 app.post("/api/pacts/:id/video-link", (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) throw new Error("Invalid id");
+    const id = requirePactIdString(req.params.id);
 
     const { address, videoLink } = req.body || {};
     if (!address || !ethers.isAddress(address))
@@ -669,8 +705,7 @@ app.post("/api/pacts/:id/video-link", (req, res) => {
 // Create on-chain createPactWithSig signature (ONLY sponsor should call this)
 app.post("/api/pacts/:id/create-sig", async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid pact id");
+    const id = requirePactIdString(req.params.id);
 
     const { address, tokenDecimals, escrowAddress, chainId } = req.body || {};
     if (!address || !ethers.isAddress(address))
@@ -776,11 +811,18 @@ app.post("/api/pacts/:id/create-sig", async (req, res) => {
 
 app.post("/api/pacts/:id/sync-views", async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) throw new Error("Invalid pact id");
+    const id = requirePactIdString(req.params.id);
 
     const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
     if (!pact) throw new Error("Pact not found");
+
+    // ✅ disallow syncing after deadline
+    if (pact.active_ends_at) {
+      const end = Date.parse(pact.active_ends_at);
+      if (Number.isFinite(end) && Date.now() > end) {
+        throw new Error("Pact expired");
+      }
+    }
 
     if (!pact.video_link) {
       throw new Error("No video link attached to pact");
@@ -826,6 +868,23 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
 
     const unlocked = calculateUnlocked(pact, stats.views);
 
+    const max = computeMaxPayoutUsd(pact);
+    const unearned = Math.max(0, max - unlocked);
+    const available = unlocked; // subtract paidOut on frontend
+
+    db.prepare(
+      `
+  UPDATE pacts
+  SET
+    cached_views=?,
+    cached_unlocked=?,
+    cached_unearned=?,
+    cached_available=?,
+    cached_stats_updated_at=?
+  WHERE id=?
+`
+    ).run(stats.views, unlocked, unearned, available, now, id);
+
     res.json({
       ok: true,
       platform,
@@ -833,6 +892,9 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
       likes: stats.likes,
       comments: stats.comments,
       unlockedPayout: unlocked,
+      unearnedPayout: unearned,
+      availablePayout: available, // backend definition: same as unlocked for now
+      statsUpdatedAt: now,
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -842,8 +904,7 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
 // Delete pact (only when status='created') — either party can delete
 app.delete("/api/pacts/:id/created", (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) throw new Error("Invalid id");
+    const id = requirePactIdString(req.params.id);
 
     const { address } = req.query;
     if (!address || !ethers.isAddress(address))
@@ -878,8 +939,7 @@ app.delete("/api/pacts/:id/created", (req, res) => {
 // Delete (or reject) pact
 app.delete("/api/pacts/:id", (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) throw new Error("Invalid id");
+    const id = requirePactIdString(req.params.id);
 
     const { address } = req.query;
     if (!address || !ethers.isAddress(address))
@@ -908,6 +968,122 @@ app.delete("/api/pacts/:id", (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+app.post("/api/pacts/:id/mark-active", (req, res) => {
+  try {
+    const id = requirePactIdString(req.params.id);
+
+    const { address } = req.body || {};
+    if (!address || !ethers.isAddress(address))
+      throw new Error("Invalid address");
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    // only sponsor can mark active
+    if (normAddr(pact.sponsor_address) !== normAddr(address)) {
+      throw new Error("Only sponsor can mark pact active");
+    }
+
+    // only allow from created -> active
+    if (String(pact.status) !== "created") {
+      throw new Error("Pact must be Created to mark active");
+    }
+
+    const startIso = nowIso();
+    const endIso = new Date(
+      Date.now() + Number(pact.duration_seconds) * 1000
+    ).toISOString();
+
+    db.prepare(
+      `
+  UPDATE pacts
+  SET status='active',
+      active_started_at=?,
+      active_ends_at=?,
+      updated_at=?
+  WHERE id=?
+`
+    ).run(startIso, endIso, startIso, id);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+app.post("/api/pacts/:id/payout-sig", async (req, res) => {
+  try {
+    const id = requirePactIdString(req.params.id);
+
+    const { address, totalEarnedUsd, tokenDecimals, escrowAddress, chainId } =
+      req.body || {};
+    if (!address || !ethers.isAddress(address))
+      throw new Error("Invalid address");
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    // only creator can claim
+    if (normAddr(pact.creator_address) !== normAddr(address)) {
+      throw new Error("Only creator can claim");
+    }
+
+    const cid = Number(chainId);
+    if (cid !== 11155111) throw new Error("Wrong chainId (expected Sepolia)");
+
+    if (!escrowAddress || !ethers.isAddress(escrowAddress)) {
+      throw new Error("Missing escrowAddress");
+    }
+    const escrow = ethers.getAddress(escrowAddress);
+
+    const decimals = Number(tokenDecimals);
+    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+      throw new Error("Invalid tokenDecimals");
+    }
+
+    const earned = Number(totalEarnedUsd);
+    if (!Number.isFinite(earned) || earned < 0)
+      throw new Error("Invalid totalEarnedUsd");
+
+    // convert to token units (2 decimals)
+    const cents = Math.round(earned * 100);
+    const totalEarnedRaw = ethers.parseUnits(
+      (cents / 100).toFixed(2),
+      decimals
+    );
+
+    // expiry (10 min)
+    const expiry = Math.floor(Date.now() / 1000) + 10 * 60;
+
+    // Must match contract digest: (chainid, this, pactId, totalEarned, expiry)
+    const packedHash = ethers.solidityPackedKeccak256(
+      ["uint256", "address", "uint256", "uint256", "uint256"],
+      [cid, escrow, id, totalEarnedRaw, expiry]
+    );
+
+    const sig = await verifierWallet.signMessage(ethers.getBytes(packedHash));
+
+    res.json({
+      ok: true,
+      pactId: id,
+      totalEarnedRaw: totalEarnedRaw.toString(),
+      expiry,
+      sig,
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+app.get("/api/health/db", (req, res) => {
+  try {
+    const row = db.prepare("SELECT 1 AS ok").get();
+    res.json({ ok: true, db: row.ok });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
