@@ -682,12 +682,13 @@ function renderPayoutGraph() {
   if (!payoutGraph) return;
 
   const w = Number(payoutGraph.getAttribute("width")) || 680;
-  const h = Number(payoutGraph.getAttribute("height")) || 220;
+  const h = Number(payoutGraph.getAttribute("height")) || 240;
 
-  const padL = 52,
-    padR = 14,
-    padT = 14,
-    padB = 42;
+  // Increased padding for better spacing - extra left padding to prevent label overlap
+  const padL = 85,  // Increased to 85 to ensure "Payout ($)" label and y-axis numbers never intersect
+    padR = 20,
+    padT = 30,     // Increased from 14 for top spacing
+    padB = 50;      // Increased from 42 for bottom spacing and "views" label
 
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
@@ -695,19 +696,29 @@ function renderPayoutGraph() {
   payoutGraph.setAttribute("viewBox", `0 0 ${w} ${h}`);
   payoutGraph.innerHTML = "";
 
+  // Background with subtle grid
+  payoutGraph.innerHTML += `
+    <rect x="0" y="0" width="${w}" height="${h}" fill="#FAFBFF" rx="8"/>
+  `;
+
+  // Draw grid lines for better readability
   payoutGraph.innerHTML += `
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${
     padT + innerH
-  }" stroke="#64B5F6" stroke-width="2"/>
+  }" stroke="#1976D2" stroke-width="2.5" stroke-linecap="round"/>
     <line x1="${padL}" y1="${padT + innerH}" x2="${padL + innerW}" y2="${
     padT + innerH
-  }" stroke="#64B5F6" stroke-width="2"/>
-    <text x="${padL}" y="${
-    h - 10
-  }" font-size="12" fill="#0277BD" font-weight="600">views</text>
-    <text x="6" y="${
+  }" stroke="#1976D2" stroke-width="2.5" stroke-linecap="round"/>
+  `;
+
+  // Axis labels with better positioning
+  payoutGraph.innerHTML += `
+    <text x="${padL + innerW / 2}" y="${
+    h - 12
+  }" font-size="13" fill="#1565C0" font-weight="600" text-anchor="middle">Views</text>
+    <text x="12" y="${
       padT + innerH / 2
-    }" font-size="12" fill="#0277BD" font-weight="600" transform="rotate(-90, 6, ${padT + innerH / 2})" text-anchor="middle">payout</text>
+    }" font-size="13" fill="#1565C0" font-weight="600" transform="rotate(-90, 12, ${padT + innerH / 2})" text-anchor="middle">Payout ($)</text>
   `;
 
   const keys = collectKeyViewsWithInfinity();
@@ -722,17 +733,17 @@ function renderPayoutGraph() {
     payoutGraph.innerHTML += `
       <line x1="${x0}" y1="${axisY}" x2="${x0}" y2="${
       axisY + 6
-    }" stroke="#999"/>
+    }" stroke="#1976D2" stroke-width="2" stroke-linecap="round"/>
       <text x="${x0}" y="${
-      axisY + 20
-    }" font-size="10" fill="#666" text-anchor="middle">0</text>
+      axisY + 22
+    }" font-size="11" fill="#1565C0" font-weight="600" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">0</text>
 
       <line x1="${xInf}" y1="${axisY}" x2="${xInf}" y2="${
       axisY + 6
-    }" stroke="#999"/>
+    }" stroke="#1976D2" stroke-width="2" stroke-linecap="round"/>
       <text x="${xInf}" y="${
-      axisY + 20
-    }" font-size="10" fill="#666" text-anchor="middle">∞</text>
+      axisY + 22
+    }" font-size="11" fill="#1565C0" font-weight="600" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">∞</text>
     `;
     syncSliderBounds();
     updateSliderReadout();
@@ -758,16 +769,23 @@ function renderPayoutGraph() {
 
   const yTicks = makeNiceTicks(maxY, 6);
 
+  // Draw horizontal grid lines and y-axis labels
   for (const yVal of yTicks) {
     const y = sy(yVal);
 
+    // Subtle grid line across the graph
+    payoutGraph.innerHTML += `
+      <line x1="${padL}" y1="${y}" x2="${padL + innerW}" y2="${y}" stroke="#E3F2FD" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
+    `;
+
+    // Y-axis tick mark
     payoutGraph.innerHTML += `
       <line x1="${
-        padL - 4
-      }" y1="${y}" x2="${padL}" y2="${y}" stroke="#90CAF9" stroke-width="1.5"/>
-      <text x="${padL - 8}" y="${
-      y + 3
-    }" font-size="11" fill="#1565C0" font-weight="500" text-anchor="end">
+        padL - 5
+      }" y1="${y}" x2="${padL}" y2="${y}" stroke="#1976D2" stroke-width="2" stroke-linecap="round"/>
+      <text x="${padL - 15}" y="${
+      y + 4
+    }" font-size="11" fill="#1565C0" font-weight="600" text-anchor="end" font-family="system-ui, -apple-system, sans-serif">
         ${formatMoneyTick(yVal)}
       </text>
     `;
@@ -785,17 +803,25 @@ function renderPayoutGraph() {
     for (let i = 1; i < keys.length - 1; i++) showIdx.add(i);
   }
 
+  // Draw vertical grid lines and x-axis labels
   const axisY = padT + innerH;
   keys.forEach((k, i) => {
     if (!showIdx.has(i)) return;
     const x = sx(k);
+    
+    // Subtle vertical grid line
+    payoutGraph.innerHTML += `
+      <line x1="${x}" y1="${padT}" x2="${x}" y2="${axisY}" stroke="#E3F2FD" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
+    `;
+
+    // X-axis tick mark
     payoutGraph.innerHTML += `
       <line x1="${x}" y1="${axisY}" x2="${x}" y2="${
       axisY + 6
-    }" stroke="#90CAF9" stroke-width="1.5"/>
+    }" stroke="#1976D2" stroke-width="2" stroke-linecap="round"/>
       <text x="${x}" y="${
-      axisY + 20
-    }" font-size="11" fill="#1565C0" font-weight="500" text-anchor="middle">
+      axisY + 22
+    }" font-size="11" fill="#1565C0" font-weight="600" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">
         ${formatXKey(k)}
       </text>
     `;
@@ -825,7 +851,7 @@ function renderPayoutGraph() {
       "stop"
     );
     stop1.setAttribute("offset", "0%");
-    stop1.setAttribute("stop-color", "#2196F3");
+    stop1.setAttribute("stop-color", "#1976D2");
     stop1.setAttribute("stop-opacity", "1");
 
     const stop2 = document.createElementNS(
@@ -858,16 +884,16 @@ function renderPayoutGraph() {
       "stop"
     );
     stop1.setAttribute("offset", "0%");
-    stop1.setAttribute("stop-color", "#2196F3");
-    stop1.setAttribute("stop-opacity", "0.2");
+    stop1.setAttribute("stop-color", "#1976D2");
+    stop1.setAttribute("stop-opacity", "0.25");
 
     const stop2 = document.createElementNS(
       "http://www.w3.org/2000/svg",
       "stop"
     );
     stop2.setAttribute("offset", "100%");
-    stop2.setAttribute("stop-color", "#42A5F5");
-    stop2.setAttribute("stop-opacity", "0.05");
+    stop2.setAttribute("stop-color", "#90CAF9");
+    stop2.setAttribute("stop-opacity", "0.08");
 
     areaGradient.appendChild(stop1);
     areaGradient.appendChild(stop2);
@@ -897,12 +923,57 @@ function renderPayoutGraph() {
   const lastX = sx(pts[pts.length - 1].k);
   areaPath += `L ${lastX} ${padT + innerH} Z`;
 
-  // Add filled area
-  payoutGraph.innerHTML += `<path d="${areaPath}" fill="url(#area-gradient)" opacity="0.6"/>`;
+  // Add filled area with improved gradient
+  payoutGraph.innerHTML += `<path d="${areaPath}" fill="url(#area-gradient)" opacity="0.4"/>`;
 
   let d = linePath;
 
-  payoutGraph.innerHTML += `<path d="${d}" fill="none" stroke="url(#${gradientId})" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  // Enhanced line with shadow effect
+  const shadowFilterId = "line-shadow";
+  let shadowFilter = payoutGraph.querySelector(`#${shadowFilterId}`);
+  if (!shadowFilter) {
+    const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+    filter.id = shadowFilterId;
+    filter.setAttribute("x", "-20%");
+    filter.setAttribute("y", "-20%");
+    filter.setAttribute("width", "140%");
+    filter.setAttribute("height", "140%");
+    
+    const blur = document.createElementNS("http://www.w3.org/2000/svg", "feGaussianBlur");
+    blur.setAttribute("in", "SourceAlpha");
+    blur.setAttribute("stdDeviation", "2");
+    
+    const offset = document.createElementNS("http://www.w3.org/2000/svg", "feOffset");
+    offset.setAttribute("dx", "0");
+    offset.setAttribute("dy", "2");
+    offset.setAttribute("result", "offsetblur");
+    
+    const transfer = document.createElementNS("http://www.w3.org/2000/svg", "feComponentTransfer");
+    const funcA = document.createElementNS("http://www.w3.org/2000/svg", "feFuncA");
+    funcA.setAttribute("type", "linear");
+    funcA.setAttribute("slope", "0.3");
+    transfer.appendChild(funcA);
+    
+    const merge = document.createElementNS("http://www.w3.org/2000/svg", "feMerge");
+    merge.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "feMergeNode"));
+    const mergeNode2 = document.createElementNS("http://www.w3.org/2000/svg", "feMergeNode");
+    mergeNode2.setAttribute("in", "SourceGraphic");
+    merge.appendChild(mergeNode2);
+    
+    filter.appendChild(blur);
+    filter.appendChild(offset);
+    filter.appendChild(transfer);
+    filter.appendChild(merge);
+    
+    let defs = payoutGraph.querySelector("defs");
+    if (!defs) {
+      defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      payoutGraph.appendChild(defs);
+    }
+    defs.appendChild(filter);
+  }
+
+  payoutGraph.innerHTML += `<path d="${d}" fill="none" stroke="url(#${gradientId})" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#${shadowFilterId})"/>`;
 
   if (viewsSlider) {
     const v = Number(viewsSlider.value || 0);
@@ -929,12 +1000,13 @@ function renderPayoutGraph() {
     const earned = totalPayoutAtViews(v);
     const yMarker = sy(earned);
 
+    // Enhanced marker with better styling
     payoutGraph.innerHTML += `
       <line x1="${xMarker}" y1="${padT}" x2="${xMarker}" y2="${
       padT + innerH
-    }" stroke="#2196F3" stroke-dasharray="4 4" stroke-width="2" opacity="0.6"/>
-      <circle cx="${xMarker}" cy="${yMarker}" r="6" fill="#2196F3" stroke="white" stroke-width="2" opacity="0.9"/>
-      <circle cx="${xMarker}" cy="${yMarker}" r="3" fill="white"/>
+    }" stroke="#1976D2" stroke-dasharray="4 4" stroke-width="2" opacity="0.5"/>
+      <circle cx="${xMarker}" cy="${yMarker}" r="7" fill="#1976D2" stroke="white" stroke-width="2.5" opacity="0.95"/>
+      <circle cx="${xMarker}" cy="${yMarker}" r="4" fill="white"/>
     `;
   }
 

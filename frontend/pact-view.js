@@ -150,21 +150,21 @@ async function getMneeBalanceAndDecimals(userAddress) {
 }
 
 function renderPayments(label, enabled, items, isProgress) {
-  if (!enabled) return `<div><strong>${label}:</strong> Disabled</div>`;
+  if (!enabled) return `<div style="margin-top: 16px;"><strong>${label}:</strong> <span style="color: #666; font-weight: normal;">Disabled</span></div>`;
   if (!items || items.length === 0)
-    return `<div><strong>${label}:</strong> None</div>`;
+    return `<div style="margin-top: 16px;"><strong>${label}:</strong> <span style="color: #666; font-weight: normal;">None</span></div>`;
 
   const rows = items
     .map((x, i) => {
-      const views = x.views;
-      const payout = x.payout;
-      return `<li>${isProgress ? "Milestone" : "Reward"} ${
+      const views = Number(x.views || 0).toLocaleString();
+      const payout = Number(x.payout || 0).toFixed(2);
+      return `<li style="margin: 8px 0; padding-left: 4px;">${isProgress ? "Milestone" : "Reward"} ${
         i + 1
-      }: ${views} views → $${payout}</li>`;
+      }: <strong>${views}</strong> views → <strong>$${payout}</strong></li>`;
     })
     .join("");
 
-  return `<div style="margin-top:10px;"><strong>${label}:</strong><ul>${rows}</ul></div>`;
+  return `<div style="margin-top: 16px; margin-bottom: 8px;"><strong>${label}:</strong><ul style="margin: 8px 0 0 0; padding-left: 24px; list-style-position: inside; list-style-type: disc;">${rows}</ul></div>`;
 }
 
 // Data load
@@ -229,23 +229,23 @@ titleEl.innerText = String(p.name || "").trim() ? p.name : `Pact #${p.id}`;
 const maxPayout = maxPayoutMnee(p);
 
 contentEl.innerHTML = `
-  <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
-    <div><strong>Status:</strong> ${prettyStatus(p.status)}</div>
-    <div><strong>Created:</strong> ${formatEastern(p.created_at)}</div>
-    <div><strong>Sponsor:</strong> ${prettyAddr(p.sponsor_address)}</div>
-    <div><strong>Creator:</strong> ${prettyAddr(p.creator_address)}</div>
+  <div style="border:1px solid rgba(33, 150, 243, 0.15); border-radius:12px; padding:20px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
+    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Status:</strong> ${prettyStatus(p.status)}</div>
+    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Created:</strong> ${formatEastern(p.created_at)}</div>
+    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Sponsor:</strong> ${prettyAddr(p.sponsor_address)}</div>
+    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Creator:</strong> ${prettyAddr(p.creator_address)}</div>
 
-    <div><strong>Max payout:</strong> $${
+    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Max payout:</strong> $${
       Number.isFinite(maxPayout) ? maxPayout.toFixed(2) : "-"
     }</div>
 
-    <div><strong>Video Link:</strong> ${
+    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Video Link:</strong> ${
       String(p.video_link || "").trim()
-        ? `<a href="${p.video_link}" target="_blank" rel="noopener noreferrer">${p.video_link}</a>`
-        : `<span style="opacity:0.7;">(not set)</span>`
+        ? `<a href="${p.video_link}" target="_blank" rel="noopener noreferrer" style="color: #1976D2; text-decoration: none;">${p.video_link}</a>`
+        : `<span style="color: #999; font-style: italic;">(not set)</span>`
     }</div>
 
-    <div><strong>Duration:</strong> ${formatDuration(p.duration_seconds)}</div>
+    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Duration:</strong> ${formatDuration(p.duration_seconds)}</div>
 
     ${renderPayments(
       "Progress Pay",
