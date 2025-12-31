@@ -162,7 +162,8 @@ function coerceMilestones(arr) {
 }
 
 async function loadNegotiatePactOrThrow(id) {
-  replacesPactIdForSubmit = Number(id);
+  replacesPactIdForSubmit = String(id); // keep uint256 intact
+
   const res = await fetch(`${API_BASE}/api/pacts/${encodeURIComponent(id)}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
@@ -673,7 +674,10 @@ function makeNiceTicks(maxVal, target = 6) {
 function formatMoneyTick(v) {
   // Always show 2 decimal places
   if (v >= 1000) {
-    return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${v.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   }
   return `$${v.toFixed(2)}`;
 }
@@ -685,10 +689,10 @@ function renderPayoutGraph() {
   const h = Number(payoutGraph.getAttribute("height")) || 240;
 
   // Increased padding for better spacing - extra left padding to prevent label overlap
-  const padL = 85,  // Increased to 85 to ensure "Payout ($)" label and y-axis numbers never intersect
+  const padL = 85, // Increased to 85 to ensure "Payout ($)" label and y-axis numbers never intersect
     padR = 20,
-    padT = 30,     // Increased from 14 for top spacing
-    padB = 50;      // Increased from 42 for bottom spacing and "views" label
+    padT = 30, // Increased from 14 for top spacing
+    padB = 50; // Increased from 42 for bottom spacing and "views" label
 
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
@@ -718,7 +722,9 @@ function renderPayoutGraph() {
   }" font-size="13" fill="#1565C0" font-weight="600" text-anchor="middle">Views</text>
     <text x="12" y="${
       padT + innerH / 2
-    }" font-size="13" fill="#1565C0" font-weight="600" transform="rotate(-90, 12, ${padT + innerH / 2})" text-anchor="middle">Payout ($)</text>
+    }" font-size="12" fill="#0277BD" font-weight="600" transform="rotate(-90, 6, ${
+    padT + innerH / 2
+  })" text-anchor="middle">payout</text>
   `;
 
   const keys = collectKeyViewsWithInfinity();
@@ -775,7 +781,9 @@ function renderPayoutGraph() {
 
     // Subtle grid line across the graph
     payoutGraph.innerHTML += `
-      <line x1="${padL}" y1="${y}" x2="${padL + innerW}" y2="${y}" stroke="#E3F2FD" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
+      <line x1="${padL}" y1="${y}" x2="${
+      padL + innerW
+    }" y2="${y}" stroke="#E3F2FD" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
     `;
 
     // Y-axis tick mark
@@ -808,7 +816,7 @@ function renderPayoutGraph() {
   keys.forEach((k, i) => {
     if (!showIdx.has(i)) return;
     const x = sx(k);
-    
+
     // Subtle vertical grid line
     payoutGraph.innerHTML += `
       <line x1="${x}" y1="${padT}" x2="${x}" y2="${axisY}" stroke="#E3F2FD" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
@@ -932,39 +940,62 @@ function renderPayoutGraph() {
   const shadowFilterId = "line-shadow";
   let shadowFilter = payoutGraph.querySelector(`#${shadowFilterId}`);
   if (!shadowFilter) {
-    const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+    const filter = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "filter"
+    );
     filter.id = shadowFilterId;
     filter.setAttribute("x", "-20%");
     filter.setAttribute("y", "-20%");
     filter.setAttribute("width", "140%");
     filter.setAttribute("height", "140%");
-    
-    const blur = document.createElementNS("http://www.w3.org/2000/svg", "feGaussianBlur");
+
+    const blur = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "feGaussianBlur"
+    );
     blur.setAttribute("in", "SourceAlpha");
     blur.setAttribute("stdDeviation", "2");
-    
-    const offset = document.createElementNS("http://www.w3.org/2000/svg", "feOffset");
+
+    const offset = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "feOffset"
+    );
     offset.setAttribute("dx", "0");
     offset.setAttribute("dy", "2");
     offset.setAttribute("result", "offsetblur");
-    
-    const transfer = document.createElementNS("http://www.w3.org/2000/svg", "feComponentTransfer");
-    const funcA = document.createElementNS("http://www.w3.org/2000/svg", "feFuncA");
+
+    const transfer = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "feComponentTransfer"
+    );
+    const funcA = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "feFuncA"
+    );
     funcA.setAttribute("type", "linear");
     funcA.setAttribute("slope", "0.3");
     transfer.appendChild(funcA);
-    
-    const merge = document.createElementNS("http://www.w3.org/2000/svg", "feMerge");
-    merge.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "feMergeNode"));
-    const mergeNode2 = document.createElementNS("http://www.w3.org/2000/svg", "feMergeNode");
+
+    const merge = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "feMerge"
+    );
+    merge.appendChild(
+      document.createElementNS("http://www.w3.org/2000/svg", "feMergeNode")
+    );
+    const mergeNode2 = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "feMergeNode"
+    );
     mergeNode2.setAttribute("in", "SourceGraphic");
     merge.appendChild(mergeNode2);
-    
+
     filter.appendChild(blur);
     filter.appendChild(offset);
     filter.appendChild(transfer);
     filter.appendChild(merge);
-    
+
     let defs = payoutGraph.querySelector("defs");
     if (!defs) {
       defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
@@ -1087,7 +1118,7 @@ function validateCounterparty() {
   const role = getRole(address);
   const otherParty = role === "sponsor" ? "Creator" : "Sponsor";
   const counterpartyCheckEl = document.getElementById("counterpartyCheck");
-  
+
   if (!value) {
     counterpartyStatus.innerText = "";
     if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
@@ -1432,7 +1463,11 @@ async function initContracts() {
 }
 
 // Confirmation Modal Elements (will be available after DOM loads)
-let roleSwitchModal, modalCancelBtn, modalConfirmBtn, currentRoleText, nextRoleText;
+let roleSwitchModal,
+  modalCancelBtn,
+  modalConfirmBtn,
+  currentRoleText,
+  nextRoleText;
 
 // Initialize modal elements when DOM is ready
 function initRoleSwitchModal() {
@@ -1441,12 +1476,12 @@ function initRoleSwitchModal() {
   modalConfirmBtn = document.getElementById("modalConfirmBtn");
   currentRoleText = document.getElementById("currentRoleText");
   nextRoleText = document.getElementById("nextRoleText");
-  
+
   if (!roleSwitchModal || !modalCancelBtn || !modalConfirmBtn) {
     console.warn("Role switch modal elements not found");
     return;
   }
-  
+
   // Close modal on cancel or overlay click
   modalCancelBtn.onclick = () => {
     hideRoleSwitchModal();
@@ -1523,7 +1558,8 @@ function showRoleSwitchModal(currentRole, nextRole) {
       return;
     }
   }
-  currentRoleText.textContent = currentRole === "sponsor" ? "Sponsor" : "Creator";
+  currentRoleText.textContent =
+    currentRole === "sponsor" ? "Sponsor" : "Creator";
   nextRoleText.textContent = nextRole === "sponsor" ? "Sponsor" : "Creator";
   roleSwitchModal.classList.add("show");
   // Force display in case CSS isn't working
@@ -1567,13 +1603,13 @@ toggleRoleButton.onchange = (e) => {
     toggleRoleButton.checked = getRole(address) === "creator";
     return;
   }
-  
+
   const cur = getRole(address);
   const next = cur === "sponsor" ? "creator" : "sponsor";
-  
+
   // Show confirmation modal
   showRoleSwitchModal(cur, next);
-  
+
   // Don't update the toggle state yet - wait for confirmation
   // The toggle will be reset if user cancels
 };

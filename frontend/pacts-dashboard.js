@@ -70,23 +70,9 @@ function getViewMode() {
   return localStorage.getItem(viewModeKey(address)) || "sponsor";
 }
 
-function setViewMode(mode) {
+async function setViewMode(mode) {
   localStorage.setItem(viewModeKey(address), mode);
-
-  if (mode === "sponsor") {
-    dashboardTitle.innerText = "Your Sponsor Pacts";
-    currentViewSpan.innerText = "Sponsor";
-  } else {
-    dashboardTitle.innerText = "Your Creator Pacts";
-    currentViewSpan.innerText = "Creator";
-  }
-
-  renderSections(mode);
-
-  // load sections that actually query backend
-  loadSentForReview(mode);
-  loadAwaitingYourReview(mode);
-  loadCreated(mode);
+  await refreshDashboard();
 }
 
 function formatEastern(iso) {
@@ -126,7 +112,28 @@ function renderSections(mode) {
 
 async function refreshDashboard() {
   const mode = getViewMode();
-  setViewMode(mode);
+
+  // keep the UI labels in sync without re-rendering everything twice
+  dashboardTitle.innerText =
+    mode === "sponsor" ? "Your Sponsor Pacts" : "Your Creator Pacts";
+  currentViewSpan.innerText = mode === "sponsor" ? "Sponsor" : "Creator";
+
+  renderSections(mode);
+
+  // load everything (including Active)
+  await Promise.all([
+    loadActive(mode),
+    loadSentForReview(mode),
+    loadAwaitingYourReview(mode),
+    loadCreated(mode),
+  ]);
+}
+
+async function refreshIfNeeded() {
+  if (localStorage.getItem("pactsNeedsRefresh") === "1") {
+    localStorage.removeItem("pactsNeedsRefresh");
+    await refreshDashboard();
+  }
 }
 
 function attachManageHandler(listEl) {
@@ -258,6 +265,70 @@ async function loadSentForReview(mode) {
       .join("");
   } catch (e) {
     console.log("Sent for Review load failed:", e);
+    countEl.innerText = "(0)";
+    listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
+  }
+}
+
+async function loadActive(mode) {
+  const sectionId = "active";
+  const listEl = document.getElementById(`list-${sectionId}`);
+  const countEl = document.getElementById(`count-${sectionId}`);
+  if (!listEl || !countEl) return;
+
+  attachManageHandler(listEl);
+
+  try {
+    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
+      address
+    )}&role=${encodeURIComponent(mode)}&status=active`;
+
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+
+    countEl.innerText = `(${data?.rows?.length || 0})`;
+
+    if (
+      !res.ok ||
+      !data.ok ||
+      !Array.isArray(data.rows) ||
+      data.rows.length === 0
+    ) {
+      listEl.innerHTML = `<p class="empty">No active pacts yet.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = data.rows
+      .map((p) => {
+        const other =
+          mode === "sponsor" ? p.creator_address : p.sponsor_address;
+
+        return `
+          <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+            <div style="font-weight:600;">${displayPactTitle(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
+              p.created_at
+            )}</div>
+            <div style="font-size:12px; opacity:0.8;">Start: ${formatEastern(
+              p.active_started_at
+            )}</div>
+<div style="font-size:12px; opacity:0.8;">End: ${formatEastern(
+          p.active_ends_at
+        )}</div>
+
+            <button type="button" data-open-pact="${
+              p.id
+            }" data-open-mode="created" style="margin-top:8px;">
+              Manage
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+  } catch (e) {
+    console.log("Active load failed:", e);
     countEl.innerText = "(0)";
     listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
   }
@@ -561,9 +632,21 @@ async function init() {
 
     window.addEventListener("pageshow", async () => {
       try {
+        // pageshow fires when coming back from browser back (bfcache)
+        await refreshIfNeeded();
+        // also refresh anyway to keep dashboard consistent
         await refreshDashboard();
       } catch (e) {
         console.log("pageshow refresh failed:", e);
+      }
+    });
+
+    // also refresh when tab regains focus (covers cases pageshow doesn't)
+    window.addEventListener("focus", async () => {
+      try {
+        await refreshIfNeeded();
+      } catch (e) {
+        console.log("focus refresh failed:", e);
       }
     });
 
