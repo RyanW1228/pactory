@@ -184,17 +184,26 @@ if (document.readyState === "loading") {
 // Environment toggle handler
 if (environmentToggle) {
   environmentToggle.onchange = () => {
+    // Get the new environment state from the toggle
     const newEnv = environmentToggle.checked ? "production" : "testing";
-    localStorage.setItem("pactory-environment", newEnv);
-    updateEnvironmentUI();
+    const currentEnv = getEnvironment();
     
-    // Reload page to apply new environment (addresses need to be updated)
-    if (confirm(`Switch to ${newEnv === "production" ? "Production" : "Testing"} environment? This will reload the page.`)) {
+    // If already in the target environment, revert the toggle
+    if (newEnv === currentEnv) {
+      environmentToggle.checked = !environmentToggle.checked;
+      return;
+    }
+    
+    // Show confirmation dialog BEFORE making any changes
+    const envName = newEnv === "production" ? "Production" : "Testing";
+    if (confirm(`Switch to ${envName} environment? This will reload the page.`)) {
+      // User confirmed - save the new environment and reload
+      localStorage.setItem("pactory-environment", newEnv);
       window.location.reload();
     } else {
-      // Revert toggle if user cancels
+      // User cancelled - revert the toggle to its previous state
       environmentToggle.checked = !environmentToggle.checked;
-      updateEnvironmentUI();
+      // No need to update UI since we're reverting to the current state
     }
   };
 }
