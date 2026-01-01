@@ -541,7 +541,7 @@ titleEl.innerText = String(p.name || "").trim() ? p.name : `Pact #${p.id}`;
 // Render main content
 const maxPayout = maxPayoutMnee(p);
 
-contentEl.innerHTML = `
+const oldPanelHtml = `
   <div style="border:1px solid rgba(33, 150, 243, 0.15); border-radius:12px; padding:20px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
     <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Status:</strong> ${prettyStatus(
       p.status
@@ -589,11 +589,14 @@ const oldDetails = document.getElementById("oldPactDetails");
 const oldBody = document.getElementById("oldPactBody");
 
 if (isActivePact(p) && oldDetails && oldBody) {
-  // ✅ Active only: old info goes into dropdown
+  // Active pact: old info ONLY inside dropdown
   oldDetails.style.display = "block";
   oldBody.innerHTML = replacedHtml + oldPanelHtml;
+
+  // And make sure contentEl starts empty so you don't see a duplicate
+  contentEl.innerHTML = "";
 } else {
-  // ✅ Non-active: keep old behavior exactly the same
+  // Non-active pact: show old info normally (no dropdown)
   if (oldDetails) oldDetails.style.display = "none";
   contentEl.innerHTML = replacedHtml + oldPanelHtml;
 }
