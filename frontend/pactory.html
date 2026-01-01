@@ -349,8 +349,10 @@
       }
 
       .status-ok {
-        color: #2E7D32;
-        background: rgba(76, 175, 80, 0.1);
+        color: #1B5E20;
+        background: rgba(76, 175, 80, 0.15);
+        border: 1px solid rgba(76, 175, 80, 0.3);
+        font-weight: 600;
       }
 
       .status-error {
@@ -591,6 +593,22 @@
         color: #1E3A5F;
       }
 
+      .max-payout-note {
+        margin-top: 16px;
+        padding: 12px 16px;
+        background: #FFF8E1;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        color: #E65100;
+        border: 1px solid rgba(255, 193, 7, 0.2);
+        line-height: 1.5;
+      }
+
+      .max-payout-note strong {
+        color: #BF360C;
+        font-weight: 600;
+      }
+
       .submit-section {
         margin-top: 32px;
         padding-top: 24px;
@@ -697,6 +715,7 @@
           />
           <span id="pactNameCheck" class="field-check" style="display: none;">✓</span>
         </div>
+        <small id="pactNameStatus" class="status-text" style="display: none;"></small>
       </div>
 
       <div class="form-section">
@@ -726,7 +745,6 @@
         </div>
         <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
           <small id="durationStatus" class="status-text"></small>
-          <span id="durationCheck" class="field-check" style="display: none;">✓</span>
         </div>
       </div>
 
@@ -825,6 +843,10 @@
           <div class="payout-display">
         Earned so far: <strong><span id="sliderPayoutLabel">$0</span></strong>
           </div>
+      </div>
+      
+      <div id="maxPayoutNote" class="max-payout-note" style="display: none;">
+        <span id="maxPayoutNoteText"></span>
       </div>
     </div>
 

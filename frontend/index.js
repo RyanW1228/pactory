@@ -117,7 +117,7 @@ async function setupContracts(params) {
   // Use current environment's MNEE address
   const mneeAddress = getMNEEAddress();
   mnee = new ethers.Contract(
-    mneeAddress, ERC20ABI, signer
+    mneeAddress, ERC20_ABI, signer
   );
 
 
@@ -155,7 +155,7 @@ async function loadFromLocalStorage() {
 }
 
 // Environment management
-function updateEnvironmentUI() {
+async function updateEnvironmentUI() {
   const env = getEnvironment();
   if (environmentToggle) {
     environmentToggle.checked = env === "production";
@@ -165,6 +165,19 @@ function updateEnvironmentUI() {
   }
   if (mintMockMNEEButton) {
     mintMockMNEEButton.style.display = env === "testing" ? "block" : "none";
+  }
+  
+  // Update MNEE label based on environment
+  const mneeLabel = document.getElementById("mneeLabel");
+  if (mneeLabel) {
+    mneeLabel.textContent = env === "testing" ? "mMNEE Balance" : "MNEE Balance";
+  }
+  
+  // Refresh balance when environment changes
+  const address = localStorage.getItem("address");
+  if (address) {
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    await showBalances(provider, address);
   }
 }
 
@@ -210,26 +223,49 @@ if (environmentToggle) {
 
 // Mint Mock MNEE function
 async function mintMockMNEE() {
-  if (!signer) {
+  // Check if wallet is connected
+  const storedAddress = localStorage.getItem("address");
+  if (!storedAddress) {
     alert("Please connect your wallet first.");
     return;
   }
 
-  const address = await signer.getAddress();
-  const amount = ethers.parseUnits("1000", 18); // Mint 1000 Mock MNEE
+  if (!window.ethereum) {
+    alert("MetaMask not found. Please install MetaMask.");
+    return;
+  }
 
   try {
     mintMockMNEEButton.disabled = true;
     mintMockMNEEButton.textContent = "Minting...";
 
+    // Get signer from MetaMask
+    const browserProvider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await browserProvider.getSigner();
+    const address = await signer.getAddress();
+
+    // Verify the connected address matches the stored address
+    if (address.toLowerCase() !== storedAddress.toLowerCase()) {
+      alert(`Address mismatch. Please connect with ${storedAddress}`);
+      mintMockMNEEButton.disabled = false;
+      mintMockMNEEButton.textContent = "Mint Mock MNEE";
+      return;
+    }
+
+    // Get decimals from the contract to ensure correct amount
     const mockMNEE = new ethers.Contract(MOCK_MNEE_CONTRACT_ADDRESS, MOCK_MNEE_ABI, signer);
+    const decimals = await mockMNEE.decimals();
+    const amount = ethers.parseUnits("1000", decimals); // Mint 1000 Mock MNEE
     
+    mintMockMNEEButton.textContent = "Confirming transaction...";
+    
+    // Call the mint function
     const tx = await mockMNEE.mint(address, amount);
-    mintMockMNEEButton.textContent = "Confirming...";
     
+    mintMockMNEEButton.textContent = "Waiting for confirmation...";
     await tx.wait();
     
-    alert(`Successfully minted 1000 Mock MNEE! Transaction: ${tx.hash}`);
+    alert(`✅ Successfully minted 1000 Mock MNEE!\n\nTransaction: ${tx.hash}\n\nYour balance will update shortly.`);
     mintMockMNEEButton.textContent = "Mint Mock MNEE";
     
     // Refresh balance
@@ -239,7 +275,8 @@ async function mintMockMNEE() {
     }
   } catch (error) {
     console.error("Mint error:", error);
-    alert(`Failed to mint Mock MNEE: ${error.message}`);
+    const errorMsg = error?.shortMessage || error?.message || String(error);
+    alert(`Failed to mint Mock MNEE:\n\n${errorMsg}\n\nMake sure:\n- You're on the correct network (Sepolia)\n- The Mock MNEE contract is deployed\n- You have enough ETH for gas`);
     mintMockMNEEButton.textContent = "Mint Mock MNEE";
   } finally {
     mintMockMNEEButton.disabled = false;
@@ -405,5 +442,141 @@ if (toggleDefaultModeButton) {
   };
 }
 
+// Address Names Management
+const addressNameInput = document.getElementById("addressNameInput");
+const addressNameLabelInput = document.getElementById("addressNameLabelInput");
+const saveAddressNameButton = document.getElementById("saveAddressNameButton");
+const addressNameStatus = document.getElementById("addressNameStatus");
+const addressNamesListContent = document.getElementById("addressNamesListContent");
+
+// Helper functions for address names
+function getAddressName(address) {
+  if (!address) return null;
+  const key = `addressName:${address.toLowerCase()}`;
+  return localStorage.getItem(key);
+}
+
+function setAddressName(address, name) {
+  if (!address) return false;
+  const key = `addressName:${address.toLowerCase()}`;
+  if (name && name.trim()) {
+    localStorage.setItem(key, name.trim());
+    return true;
+  } else {
+    localStorage.removeItem(key);
+    return false;
+  }
+}
+
+function getAllAddressNames() {
+  const names = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("addressName:")) {
+      const address = key.replace("addressName:", "");
+      names[address] = localStorage.getItem(key);
+    }
+  }
+  return names;
+}
+
+function formatAddressWithName(address) {
+  if (!address) return address;
+  const name = getAddressName(address);
+  if (name) {
+    return `${name} (${address})`;
+  }
+  return address;
+}
+
+function renderAddressNamesList() {
+  if (!addressNamesListContent) return;
+  
+  const names = getAllAddressNames();
+  const entries = Object.entries(names);
+  
+  if (entries.length === 0) {
+    addressNamesListContent.innerHTML = '<div style="color: #999; font-style: italic; padding: 12px;">No address names saved yet.</div>';
+    return;
+  }
+  
+  addressNamesListContent.innerHTML = entries.map(([address, name]) => `
+    <div class="address-name-item">
+      <div class="address-name-item-address">${address}</div>
+      <div class="address-name-item-label">${name}</div>
+      <button class="address-name-item-delete" data-address="${address}">Delete</button>
+    </div>
+  `).join("");
+  
+  // Add delete handlers
+  addressNamesListContent.querySelectorAll(".address-name-item-delete").forEach(btn => {
+    btn.onclick = () => {
+      const addr = btn.getAttribute("data-address");
+      if (confirm(`Delete name for ${addr}?`)) {
+        setAddressName(addr, "");
+        renderAddressNamesList();
+        addressNameStatus.textContent = "Address name deleted.";
+        addressNameStatus.style.color = "#1976D2";
+        setTimeout(() => {
+          addressNameStatus.textContent = "";
+        }, 2000);
+      }
+    };
+  });
+}
+
+if (saveAddressNameButton) {
+  saveAddressNameButton.onclick = () => {
+    const address = addressNameInput?.value.trim();
+    const name = addressNameLabelInput?.value.trim();
+    
+    if (!address) {
+      addressNameStatus.textContent = "Please enter an address.";
+      addressNameStatus.style.color = "#C62828";
+      return;
+    }
+    
+    if (!ethers.isAddress(address)) {
+      addressNameStatus.textContent = "Invalid Ethereum address.";
+      addressNameStatus.style.color = "#C62828";
+      return;
+    }
+    
+    if (!name) {
+      addressNameStatus.textContent = "Please enter a name.";
+      addressNameStatus.style.color = "#C62828";
+      return;
+    }
+    
+    setAddressName(address, name);
+    renderAddressNamesList();
+    addressNameStatus.textContent = "Address name saved!";
+    addressNameStatus.style.color = "#1B5E20";
+    
+    // Clear inputs
+    if (addressNameInput) addressNameInput.value = "";
+    if (addressNameLabelInput) addressNameLabelInput.value = "";
+    
+    setTimeout(() => {
+      addressNameStatus.textContent = "";
+    }, 2000);
+  };
+}
+
+// Export functions for use in other files
+window.getAddressName = getAddressName;
+window.formatAddressWithName = formatAddressWithName;
+
 // Init
 loadFromLocalStorage().catch(() => {});
+updateEnvironmentUI().catch(() => {});
+renderAddressNamesList();
+
+// Listen for environment changes from other pages
+window.addEventListener('storage', async (event) => {
+  if (event.key === 'pactory-environment') {
+    await updateEnvironmentUI();
+  } else if (event.key && event.key.startsWith('addressName:')) {
+    renderAddressNamesList();
+  }
+});

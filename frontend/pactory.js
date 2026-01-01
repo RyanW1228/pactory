@@ -1,5 +1,5 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
+import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS, getMNEEAddress } from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
 
 const ERC20_ABI = [
@@ -29,6 +29,18 @@ const durationStatus = document.getElementById("durationStatus");
 
 // ✅ NEW: Pact name input (required)
 const pactNameInput = document.getElementById("pactName");
+const pactNameStatus = document.getElementById("pactNameStatus");
+
+// Helper function to format address with name
+function formatAddressWithName(addr) {
+  if (!addr) return addr;
+  const nameKey = `addressName:${addr.toLowerCase()}`;
+  const name = localStorage.getItem(nameKey);
+  if (name) {
+    return `${name} (${addr})`;
+  }
+  return addr;
+}
 
 const MAX_MILESTONES = 10;
 const progressMilestonesEl = document.getElementById("progressMilestones");
@@ -52,6 +64,8 @@ const saveAonRewardButton = document.getElementById("saveAonRewardButton");
 const editAonRewardsButton = document.getElementById("editAonRewardsButton");
 
 const payoutGraph = document.getElementById("payoutGraph");
+const maxPayoutNote = document.getElementById("maxPayoutNote");
+const maxPayoutNoteText = document.getElementById("maxPayoutNoteText");
 const X_INF = "__INF__";
 
 const viewsSlider = document.getElementById("viewsSlider");
@@ -140,6 +154,25 @@ function renderRole() {
 
   counterpartyLabel.innerText =
     role === "sponsor" ? "Creator address" : "Sponsor address";
+}
+
+function formatDurationForNote(days, hours, minutes) {
+  const parts = [];
+  if (days > 0) {
+    parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+  }
+  if (hours > 0) {
+    parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+  }
+  
+  if (parts.length === 0) return '0 minutes';
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return parts.join(' and ');
+  // For 3 parts: "X days, Y hours, and Z minutes"
+  return parts.slice(0, -1).join(', ') + ', and ' + parts[parts.length - 1];
 }
 
 function splitDuration(seconds) {
@@ -342,6 +375,7 @@ function renderProgressMilestones() {
     .join("");
 
   renderPayoutGraph();
+  updateMaxPayoutNote();
 }
 
 function formatRate(rate, sig = 2, minDecimals = 2) {
@@ -492,6 +526,7 @@ function renderAonRewards() {
     .join("");
 
   renderPayoutGraph();
+  updateMaxPayoutNote();
 }
 
 function renderAonPayEnabled() {
@@ -689,7 +724,7 @@ function renderPayoutGraph() {
   const h = Number(payoutGraph.getAttribute("height")) || 240;
 
   // Increased padding for better spacing - extra left padding to prevent label overlap
-  const padL = 85, // Increased to 85 to ensure "Payout ($)" label and y-axis numbers never intersect
+  const padL = 90, // Increased to 90 to ensure "Payout ($)" label has enough space and doesn't get cut off
     padR = 20,
     padT = 30, // Increased from 14 for top spacing
     padB = 50; // Increased from 42 for bottom spacing and "views" label
@@ -720,11 +755,11 @@ function renderPayoutGraph() {
     <text x="${padL + innerW / 2}" y="${
     h - 12
   }" font-size="13" fill="#1565C0" font-weight="600" text-anchor="middle">Views</text>
-    <text x="12" y="${
+    <text x="20" y="${
       padT + innerH / 2
-    }" font-size="12" fill="#0277BD" font-weight="600" transform="rotate(-90, 6, ${
+    }" font-size="13" fill="#1565C0" font-weight="600" transform="rotate(-90, 20, ${
     padT + innerH / 2
-  })" text-anchor="middle">payout</text>
+  })" text-anchor="middle">Payout ($)</text>
   `;
 
   const keys = collectKeyViewsWithInfinity();
@@ -771,9 +806,31 @@ function renderPayoutGraph() {
   });
 
   const maxY = Math.max(1, ...pts.map((p) => Math.max(p.yBefore, p.yAfter)));
+  
+  // Generate nice ticks, but ensure maxY is always the top tick
+  let yTicks = makeNiceTicks(maxY, 6);
+  
+  // Ensure maxY is always the highest tick
+  const currentMax = Math.max(...yTicks);
+  if (currentMax < maxY) {
+    // Remove ticks that are above maxY, then add maxY
+    yTicks = yTicks.filter(t => t <= maxY);
+    if (!yTicks.includes(maxY)) {
+      yTicks.push(maxY);
+    }
+    yTicks.sort((a, b) => a - b);
+  } else if (currentMax > maxY) {
+    // Replace the highest tick with maxY
+    yTicks = yTicks.filter(t => t < currentMax);
+    yTicks.push(maxY);
+    yTicks.sort((a, b) => a - b);
+  } else {
+    // maxY is already the max, just ensure sorted
+    yTicks.sort((a, b) => a - b);
+  }
+  
+  // Use maxY for scaling (the actual max payout value)
   const sy = (y) => padT + innerH - (y / maxY) * innerH;
-
-  const yTicks = makeNiceTicks(maxY, 6);
 
   // Draw horizontal grid lines and y-axis labels
   for (const yVal of yTicks) {
@@ -1043,6 +1100,7 @@ function renderPayoutGraph() {
 
   syncSliderBounds();
   updateSliderReadout();
+  updateMaxPayoutNote();
 }
 
 function maxThresholdViews() {
@@ -1100,14 +1158,64 @@ function updateSliderReadout() {
   sliderPayoutLabel.innerText = formatMoney(earned);
 }
 
+function updateMaxPayoutNote() {
+  if (!maxPayoutNote || !maxPayoutNoteText) return;
+  
+  // Calculate max payout
+  const keys = collectKeyViewsWithInfinity();
+  const hasAnyThreshold = keys.some((k) => k !== 0 && k !== X_INF);
+  
+  if (!hasAnyThreshold) {
+    maxPayoutNote.style.display = 'none';
+    return;
+  }
+  
+  const pts = keys.map((k) => {
+    if (k === X_INF) {
+      const y = totalPayoutAtViews(Number.MAX_SAFE_INTEGER);
+      return { k, yBefore: y, yAfter: y };
+    }
+    const progress = progressPayoutAtViews(k);
+    const yBefore = progress + aonBonusBeforeViews(k);
+    const yAfter = progress + aonBonusAtViews(k);
+    return { k, yBefore, yAfter };
+  });
+  
+  const maxPayout = Math.max(1, ...pts.map((p) => Math.max(p.yBefore, p.yAfter)));
+  
+  // Get duration
+  const days = Number(durationDays.value) || 0;
+  const hours = Number(durationHours.value) || 0;
+  const minutes = Number(durationMinutes.value) || 0;
+  
+  // Check if duration is valid
+  const totalSeconds = days * 86400 + hours * 3600 + minutes * 60;
+  if (totalSeconds <= 0) {
+    maxPayoutNote.style.display = 'none';
+    return;
+  }
+  
+  const durationText = formatDurationForNote(days, hours, minutes);
+  const maxPayoutFormatted = formatMoney(maxPayout);
+  
+  maxPayoutNoteText.innerHTML = `The sponsor will have to lock <strong>${maxPayoutFormatted}</strong> for <strong>${durationText}</strong>.`;
+  maxPayoutNote.style.display = 'block';
+}
+
 // ✅ NEW: validate pact name (required)
 function validatePactName() {
   if (!pactNameInput) return true; // if missing in DOM, don't hard-crash
   const name = String(pactNameInput.value || "").trim();
-  const isValid = name.length > 0 && name.length <= 80;
+  const isValid = name.length > 0 && name.length <= 60; // Changed from 80 to match validation
   const checkEl = document.getElementById("pactNameCheck");
   if (checkEl) {
     checkEl.style.display = isValid ? "inline-flex" : "none";
+  }
+  // Clear error status when valid
+  if (pactNameStatus && isValid) {
+    pactNameStatus.style.display = "none";
+    pactNameStatus.className = "status-text";
+    pactNameStatus.innerText = "";
   }
   return isValid;
 }
@@ -1129,17 +1237,26 @@ function validateCounterparty() {
     counterpartyStatus.innerText = `Invalid ${
       role === "sponsor" ? "Creator" : "Sponsor"
     } address`;
+    counterpartyStatus.className = "status-text status-error";
     if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
     return false;
   }
 
   if (value.toLowerCase() === address.toLowerCase()) {
     counterpartyStatus.innerText = `${otherParty} cannot be your own address`;
+    counterpartyStatus.className = "status-text status-error";
     if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
     return false;
   }
 
-  counterpartyStatus.innerText = `✓ Valid ${otherParty} address`;
+  // Check if address has a saved name
+  const name = localStorage.getItem(`addressName:${value.toLowerCase()}`);
+  if (name) {
+    counterpartyStatus.innerText = `✓ Valid ${otherParty} address - ${name}`;
+  } else {
+    counterpartyStatus.innerText = `✓ Valid ${otherParty} address`;
+  }
+  counterpartyStatus.className = "status-text status-ok";
   if (counterpartyCheckEl) {
     counterpartyCheckEl.style.display = "inline-flex";
   }
@@ -1150,42 +1267,41 @@ function validateDuration() {
   const d = Number(durationDays.value);
   const h = Number(durationHours.value);
   const m = Number(durationMinutes.value);
-  const durationCheckEl = document.getElementById("durationCheck");
+  // Removed durationCheckEl - no longer using separate checkmark icon
 
   if (![d, h, m].every(Number.isInteger)) {
     durationStatus.innerText = "Duration values must be integers";
-    if (durationCheckEl) durationCheckEl.style.display = "none";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (d < 0 || h < 0 || m < 0) {
     durationStatus.innerText = "Duration values cannot be negative";
-    if (durationCheckEl) durationCheckEl.style.display = "none";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (h > 23) {
     durationStatus.innerText = "Hours must be between 0 and 23";
-    if (durationCheckEl) durationCheckEl.style.display = "none";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (m > 59) {
     durationStatus.innerText = "Minutes must be between 0 and 59";
-    if (durationCheckEl) durationCheckEl.style.display = "none";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   if (d === 0 && h === 0 && m === 0) {
     durationStatus.innerText = "Duration must be greater than 0";
-    if (durationCheckEl) durationCheckEl.style.display = "none";
+    durationStatus.className = "status-text status-error";
     return false;
   }
 
   durationStatus.innerText = "✓ Valid duration";
-  if (durationCheckEl) {
-    durationCheckEl.style.display = "inline-flex";
-  }
+  durationStatus.className = "status-text status-ok";
+  updateMaxPayoutNote();
   return true;
 }
 
@@ -1459,7 +1575,9 @@ async function initContracts() {
   signer = await provider.getSigner();
 
   escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, signer);
-  mnee = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
+  // Use current environment's MNEE address
+  const mneeAddress = getMNEEAddress();
+  mnee = new ethers.Contract(mneeAddress, ERC20_ABI, signer);
 }
 
 // Confirmation Modal Elements (will be available after DOM loads)
@@ -1671,11 +1789,13 @@ addMilestoneButton.onclick = () => {
 
   if (!result.ok) {
     ppStatus.innerText = result.msg;
+    ppStatus.className = "status-text status-error";
     return;
   }
 
   if (progressMilestones.length >= MAX_MILESTONES) {
     ppStatus.innerText = "Maximum of 10 milestones reached.";
+    ppStatus.className = "status-text status-error";
     return;
   }
 
@@ -1684,6 +1804,7 @@ addMilestoneButton.onclick = () => {
   renderProgressMilestones();
   updateDeleteMilestoneVisibility();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 };
 
 deleteMilestoneButton.onclick = () => {
@@ -1694,20 +1815,24 @@ deleteMilestoneButton.onclick = () => {
   renderProgressMilestones();
   updateDeleteMilestoneVisibility();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 };
 
 saveMilestonesButton.onclick = () => {
   const result = validateMilestonesAndExplain();
   if (!result.ok) {
     ppStatus.innerText = result.msg;
+    ppStatus.className = "status-text status-error";
     return;
   }
 
   milestonesLocked = true;
   ppStatus.innerText = "✓ Saved. Progress Pay is locked.";
+  ppStatus.className = "status-text status-ok";
   renderProgressMilestones();
   updateMilestoneControlsVisibility();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 };
 
 editMilestonesButton.onclick = () => {
@@ -1716,6 +1841,7 @@ editMilestonesButton.onclick = () => {
   renderProgressMilestones();
   updateMilestoneControlsVisibility();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 };
 
 aonRewardsEl.addEventListener("input", (e) => {
@@ -1739,11 +1865,13 @@ addAonRewardButton.onclick = () => {
   const result = validateAonRewardsAndExplain();
   if (!result.ok) {
     aonStatus.innerText = result.msg;
+    aonStatus.className = "status-text status-error";
     return;
   }
 
   if (aonRewards.length >= MAX_MILESTONES) {
     aonStatus.innerText = "Maximum of 10 rewards reached.";
+    aonStatus.className = "status-text status-error";
     return;
   }
 
@@ -1753,6 +1881,7 @@ addAonRewardButton.onclick = () => {
   updateDeleteAonRewardVisibility();
   updateAonRewardControlsVisibility();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 };
 
 deleteAonRewardButton.onclick = () => {
@@ -1764,20 +1893,24 @@ deleteAonRewardButton.onclick = () => {
   updateDeleteAonRewardVisibility();
   updateAonRewardControlsVisibility();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 };
 
 saveAonRewardButton.onclick = () => {
   const result = validateAonRewardsAndExplain();
   if (!result.ok) {
     aonStatus.innerText = result.msg;
+    aonStatus.className = "status-text status-error";
     return;
   }
 
   aonRewardsLocked = true;
   aonStatus.innerText = "✓ Saved. All-or-Nothing Pay is locked.";
+  aonStatus.className = "status-text status-ok";
   renderAonRewards();
   updateAonRewardControlsVisibility();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 };
 
 editAonRewardsButton.onclick = () => {
@@ -1786,15 +1919,31 @@ editAonRewardsButton.onclick = () => {
   renderAonRewards();
   updateAonRewardControlsVisibility();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 };
 
 viewsSlider?.addEventListener("input", () => {
   updateSliderReadout();
   renderPayoutGraph();
+  updateMaxPayoutNote();
 });
 
 sendForReviewButton.onclick = async () => {
   setSendStatus("");
+
+  // Clear all previous error states
+  const clearAllErrors = () => {
+    if (pactNameStatus) {
+      pactNameStatus.className = "status-text";
+      pactNameStatus.style.display = "none";
+      pactNameStatus.innerText = "";
+    }
+    counterpartyStatus.className = "status-text";
+    durationStatus.className = "status-text";
+    ppStatus.className = "status-text";
+    aonStatus.className = "status-text";
+  };
+  clearAllErrors();
 
   // lock UI
   sendForReviewButton.disabled = true;
@@ -1802,42 +1951,92 @@ sendForReviewButton.onclick = async () => {
   sendForReviewButton.style.cursor = "not-allowed";
 
   try {
+    let hasErrors = false;
+
     // 0) Pact name required
     const pactName = String(pactNameInput?.value || "").trim();
-    if (!pactName) return setSendStatus("Pact name is required.");
-    if (pactName.length > 60)
-      return setSendStatus("Pact name must be 60 characters or less.");
+    if (!pactName) {
+      if (pactNameStatus) {
+        pactNameStatus.innerText = "Pact name is required.";
+        pactNameStatus.className = "status-text status-error";
+        pactNameStatus.style.display = "block";
+      }
+      if (!hasErrors) {
+        setSendStatus("Pact name is required.");
+      }
+      hasErrors = true;
+    } else if (pactName.length > 60) {
+      if (pactNameStatus) {
+        pactNameStatus.innerText = "Pact name must be 60 characters or less.";
+        pactNameStatus.className = "status-text status-error";
+        pactNameStatus.style.display = "block";
+      }
+      if (!hasErrors) {
+        setSendStatus("Pact name must be 60 characters or less.");
+      }
+      hasErrors = true;
+    }
 
     // 1) Counterparty valid
-    if (!validateCounterparty())
-      return setSendStatus(
-        counterpartyStatus.innerText || "Enter a valid address."
-      );
+    if (!validateCounterparty()) {
+      counterpartyStatus.className = "status-text status-error";
+      if (!hasErrors) {
+        setSendStatus(counterpartyStatus.innerText || "Enter a valid address.");
+      }
+      hasErrors = true;
+    }
 
     // 2) Duration valid
-    if (!validateDuration())
-      return setSendStatus(
-        durationStatus.innerText || "Enter a valid duration."
-      );
+    if (!validateDuration()) {
+      durationStatus.className = "status-text status-error";
+      if (!hasErrors) {
+        setSendStatus(durationStatus.innerText || "Enter a valid duration.");
+      }
+      hasErrors = true;
+    }
 
     // 3) Progress pay: disabled OR saved
     if (progressPayEnabled.checked) {
-      if (!milestonesLocked)
-        return setSendStatus(
-          "Progress Pay is enabled — please Save it (lock it) or disable it."
-        );
-      const result = validateMilestonesAndExplain();
-      if (!result.ok) return setSendStatus(result.msg);
+      if (!milestonesLocked) {
+        ppStatus.innerText = "Progress Pay is enabled — please Save it (lock it) or disable it.";
+        ppStatus.className = "status-text status-error";
+        if (!hasErrors) {
+          setSendStatus("Progress Pay is enabled — please Save it (lock it) or disable it.");
+        }
+        hasErrors = true;
+      } else {
+        const result = validateMilestonesAndExplain();
+        if (!result.ok) {
+          ppStatus.innerText = result.msg;
+          ppStatus.className = "status-text status-error";
+          if (!hasErrors) {
+            setSendStatus(result.msg);
+          }
+          hasErrors = true;
+        }
+      }
     }
 
     // 4) AON pay: disabled OR saved
     if (aonPayEnabled.checked) {
-      if (!aonRewardsLocked)
-        return setSendStatus(
-          "All-or-Nothing Pay is enabled — please Save it (lock it) or disable it."
-        );
-      const result = validateAonRewardsAndExplain();
-      if (!result.ok) return setSendStatus(result.msg);
+      if (!aonRewardsLocked) {
+        aonStatus.innerText = "All-or-Nothing Pay is enabled — please Save it (lock it) or disable it.";
+        aonStatus.className = "status-text status-error";
+        if (!hasErrors) {
+          setSendStatus("All-or-Nothing Pay is enabled — please Save it (lock it) or disable it.");
+        }
+        hasErrors = true;
+      } else {
+        const result = validateAonRewardsAndExplain();
+        if (!result.ok) {
+          aonStatus.innerText = result.msg;
+          aonStatus.className = "status-text status-error";
+          if (!hasErrors) {
+            setSendStatus(result.msg);
+          }
+          hasErrors = true;
+        }
+      }
     }
 
     // 5) Must have at least one payment
@@ -1857,10 +2056,31 @@ sendForReviewButton.onclick = async () => {
         return Number.isInteger(v) && v > 0 && Number.isFinite(p) && p > 0;
       });
 
-    if (!hasProgressPayment && !hasAonPayment)
-      return setSendStatus(
-        "You must include at least one payment (a milestone and/or a reward)."
-      );
+    if (!hasProgressPayment && !hasAonPayment) {
+      // Show error on both sections if both are enabled but empty
+      if (progressPayEnabled.checked) {
+        ppStatus.innerText = "You must include at least one milestone.";
+        ppStatus.className = "status-text status-error";
+      }
+      if (aonPayEnabled.checked) {
+        aonStatus.innerText = "You must include at least one reward.";
+        aonStatus.className = "status-text status-error";
+      }
+      if (!hasErrors) {
+        setSendStatus(
+          "You must include at least one payment (a milestone and/or a reward)."
+        );
+      }
+      hasErrors = true;
+    }
+
+    // If any errors, stop here
+    if (hasErrors) {
+      sendForReviewButton.disabled = false;
+      sendForReviewButton.style.opacity = "1";
+      sendForReviewButton.style.cursor = "pointer";
+      return;
+    }
 
     // Ethereum verification
     setSendStatus("Waiting for MetaMask signature...");

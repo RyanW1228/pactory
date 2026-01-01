@@ -199,9 +199,39 @@ export function initSecondaryLoadingScreen() {
 }
 
 // Show secondary loading screen programmatically (for async operations)
-export function showSecondaryLoadingScreen() {
-  // Don't create if already exists
-  if (document.getElementById("secondary-loading-screen")) return;
+export function showSecondaryLoadingScreen(customMessage = null) {
+  // Check if already exists - if so, update message if provided
+  let secondaryLoader = document.getElementById("secondary-loading-screen");
+  
+  if (secondaryLoader) {
+    // Update message if custom message provided
+    if (customMessage) {
+      let messageEl = secondaryLoader.querySelector(".loader-message");
+      if (messageEl) {
+        messageEl.textContent = customMessage;
+      } else {
+        // Create message element if it doesn't exist
+        const messageDiv = document.createElement("div");
+        messageDiv.className = "loader-message";
+        messageDiv.textContent = customMessage;
+        const loaderContent = secondaryLoader.querySelector(".loader-content");
+        if (loaderContent) {
+          // Insert after penguin container, before dots
+          const penguinContainer = loaderContent.querySelector(".penguin-container-secondary");
+          const dots = loaderContent.querySelector(".loader-dots");
+          if (penguinContainer && dots) {
+            loaderContent.insertBefore(messageDiv, dots);
+          } else {
+            loaderContent.appendChild(messageDiv);
+          }
+        }
+      }
+    }
+    // Make sure it's visible
+    secondaryLoader.style.opacity = "1";
+    secondaryLoader.style.display = "flex";
+    return;
+  }
   
   // Hide content
   const containers = document.querySelectorAll(".container");
@@ -213,13 +243,14 @@ export function showSecondaryLoadingScreen() {
   });
   
   // Create loader
-  const secondaryLoader = document.createElement("div");
+  secondaryLoader = document.createElement("div");
   secondaryLoader.id = "secondary-loading-screen";
   secondaryLoader.innerHTML = `
     <div class="loader-content">
       <div class="penguin-container-secondary">
         <img src="./assets/images/pengu-dancy.gif" class="penguin-gif-secondary" alt="Dancing Penguin" />
       </div>
+      ${customMessage ? `<div class="loader-message">${customMessage}</div>` : ''}
       <div class="loader-dots">
         <span></span><span></span><span></span>
       </div>

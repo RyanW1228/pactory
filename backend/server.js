@@ -258,6 +258,92 @@ async function scrapeTikTokVideo(videoUrl) {
   };
 }
 
+async function scrapeInstagramVideo(videoUrl) {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) throw new Error("APIFY_TOKEN is missing");
+
+  const endpoint =
+    "https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items";
+
+  const res = await fetch(`${endpoint}?token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      // Instagram scraper expects startUrls array with objects containing url
+      startUrls: [{ url: videoUrl }],
+      resultsType: "posts",
+      resultsLimit: 1,
+    }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Apify HTTP ${res.status}: ${txt || res.statusText}`);
+  }
+
+  const data = await res.json();
+
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("Apify returned 0 items (empty dataset)");
+  }
+
+  const v = data[0];
+
+  return {
+    views: Number(v.videoViewCount ?? v.playCount ?? v.videoPlayCount ?? 0),
+    likes: Number(v.likesCount ?? v.likes ?? 0),
+    comments: Number(v.commentsCount ?? v.comments ?? 0),
+  };
+}
+
+async function scrapeYouTubeShortsVideo(videoUrl) {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) throw new Error("APIFY_TOKEN is missing");
+
+  const endpoint =
+    "https://api.apify.com/v2/acts/streamers~youtube-shorts-scraper/run-sync-get-dataset-items";
+
+  // Extract video ID from YouTube URL if it's a full URL
+  // YouTube URLs can be: https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID or https://www.youtube.com/shorts/VIDEO_ID
+  let videoId = null;
+  if (videoUrl.includes("youtube.com/shorts/")) {
+    videoId = videoUrl.split("/shorts/")[1].split("?")[0];
+  } else if (videoUrl.includes("youtube.com/watch?v=")) {
+    videoId = videoUrl.split("v=")[1].split("&")[0];
+  } else if (videoUrl.includes("youtu.be/")) {
+    videoId = videoUrl.split("youtu.be/")[1].split("?")[0];
+  }
+
+  const res = await fetch(`${endpoint}?token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      // YouTube Shorts scraper can accept video URLs directly
+      startUrls: videoId ? [{ url: `https://www.youtube.com/watch?v=${videoId}` }] : [{ url: videoUrl }],
+      maxShortsPerSearch: 1,
+    }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Apify HTTP ${res.status}: ${txt || res.statusText}`);
+  }
+
+  const data = await res.json();
+
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("Apify returned 0 items (empty dataset)");
+  }
+
+  const v = data[0];
+
+  return {
+    views: Number(v.viewCount ?? v.views ?? 0),
+    likes: Number(v.likeCount ?? v.likes ?? 0),
+    comments: Number(v.commentCount ?? v.comments ?? 0),
+  };
+}
+
 // double check math on this
 
 function canon(arr) {
@@ -831,15 +917,24 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
     const platform = (() => {
       const u = String(pact.video_link || "").toLowerCase();
       if (u.includes("tiktok.com")) return "tiktok";
-      if (u.includes("instagram.com")) return "instagram";
+      if (u.includes("instagram.com") || u.includes("instagr.am")) return "instagram";
+      if (u.includes("youtube.com/shorts/") || (u.includes("youtube.com") && u.includes("shorts"))) return "youtube_shorts";
+      if (u.includes("youtu.be/")) {
+        // Could be a short, but we'll treat youtu.be links as potential shorts
+        return "youtube_shorts";
+      }
       return "unknown";
     })();
 
     let stats;
     if (platform === "tiktok") {
       stats = await scrapeTikTokVideo(pact.video_link);
+    } else if (platform === "instagram") {
+      stats = await scrapeInstagramVideo(pact.video_link);
+    } else if (platform === "youtube_shorts") {
+      stats = await scrapeYouTubeShortsVideo(pact.video_link);
     } else {
-      throw new Error("Instagram not wired yet");
+      throw new Error(`Unsupported platform. Supported platforms: TikTok, Instagram, YouTube Shorts`);
     }
 
     const now = new Date().toISOString();

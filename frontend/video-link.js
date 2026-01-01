@@ -45,6 +45,33 @@ function isProbablyUrl(s) {
   }
 }
 
+function isValidVideoPlatform(url) {
+  const u = String(url || "").toLowerCase();
+  
+  // Check for TikTok
+  if (u.includes("tiktok.com")) return { valid: true, platform: "TikTok" };
+  
+  // Check for Instagram (including Reels)
+  if (u.includes("instagram.com") || u.includes("instagr.am")) {
+    return { valid: true, platform: "Instagram" };
+  }
+  
+  // Check for YouTube Shorts
+  if (u.includes("youtube.com/shorts/") || (u.includes("youtube.com") && u.includes("shorts"))) {
+    return { valid: true, platform: "YouTube Shorts" };
+  }
+  
+  // Also accept regular YouTube URLs (youtu.be or youtube.com/watch)
+  if (u.includes("youtu.be/") || (u.includes("youtube.com") && u.includes("watch"))) {
+    return { valid: true, platform: "YouTube" };
+  }
+  
+  return { 
+    valid: false, 
+    error: "Unsupported platform. Please use TikTok, Instagram, or YouTube Shorts links." 
+  };
+}
+
 backButton?.addEventListener("click", () => history.back());
 cancelButton?.addEventListener("click", () => history.back());
 
@@ -93,6 +120,12 @@ saveButton?.addEventListener("click", async () => {
   if (!link) return setStatus("Please paste a video link.");
   if (!isProbablyUrl(link))
     return setStatus("Please enter a valid URL (https://...)");
+  
+  // Validate platform support
+  const platformCheck = isValidVideoPlatform(link);
+  if (!platformCheck.valid) {
+    return setStatus(platformCheck.error);
+  }
 
   // lock UI
   saveButton.disabled = true;

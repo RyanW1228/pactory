@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="./loading-screen.css" />
     <link rel="stylesheet" href="./fireworks.css" />
     <link rel="stylesheet" href="./music.css" />
+    <link rel="stylesheet" href="./walkthrough.css" />
     <style>
       * {
         margin: 0;
@@ -128,6 +129,11 @@
         display: none;
       }
 
+      /* Dropdown arrow rotation for payout graph */
+      .payout-graph-details[open] .dropdown-arrow {
+        transform: rotate(180deg);
+      }
+
       #replacedPactBody,
       #oldPactBody {
         margin-top: 16px;
@@ -193,18 +199,21 @@
         initSecondaryLoadingScreen,
       } from "./loading-screen.js";
       import { initMusic } from "./music.js";
+      import { initWalkthrough } from "./walkthrough.js";
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => {
           initLoadingScreen();
           initSecondaryLoadingScreen();
           initCursorBackground();
           initMusic();
+          initWalkthrough();
         });
       } else {
         initLoadingScreen();
         initSecondaryLoadingScreen();
         initCursorBackground();
         initMusic();
+        initWalkthrough();
       }
     </script>
     <script type="module" src="./pact-view.js"></script>

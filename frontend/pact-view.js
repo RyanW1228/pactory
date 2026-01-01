@@ -3,7 +3,7 @@
 const API_BASE = "http://localhost:3000";
 
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
+import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS, getMNEEAddress } from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
 import {
   showSecondaryLoadingScreen,
@@ -115,8 +115,500 @@ function normAddr(a) {
   return String(a || "").toLowerCase();
 }
 
+// Signature verification for pact actions
+async function verifySignatureForAction(action, pactId) {
+  if (!window.ethereum) {
+    alert("MetaMask not found. Please install MetaMask.");
+    return false;
+  }
+
+  // Helper: timeout wrapper
+  const withTimeout = (p, ms, label) =>
+    Promise.race([
+      p,
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error(`${label} timed out`)), ms)
+      ),
+    ]);
+
+  // 1) Get accounts
+  let accounts;
+  try {
+    accounts = await withTimeout(
+      window.ethereum.request({ method: "eth_accounts" }),
+      8000,
+      "eth_accounts"
+    );
+  } catch (e) {
+    alert(`Wallet check failed: ${e?.message || e}`);
+    return false;
+  }
+
+  // 2) If not connected, request connect
+  if (!accounts || accounts.length === 0) {
+    try {
+      accounts = await withTimeout(
+        window.ethereum.request({ method: "eth_requestAccounts" }),
+        30000,
+        "MetaMask connect"
+      );
+    } catch (e) {
+      alert(
+        `Wallet connect failed (popup may be blocked, MetaMask may be locked, or request pending):\n\n${
+          e?.message || e
+        }`
+      );
+      return false;
+    }
+  }
+
+  const selected = (accounts?.[0] || "").toLowerCase();
+  if (!selected) {
+    alert("No wallet selected.");
+    return false;
+  }
+
+  if (selected !== address.toLowerCase()) {
+    alert(
+      `MetaMask account does not match your login address.\n\nLogin: ${address}\nMetaMask: ${accounts[0]}`
+    );
+    return false;
+  }
+
+  // 3) Build message with action context
+  const nonce = ethers.hexlify(ethers.randomBytes(16));
+  const issuedAt = new Date().toISOString();
+
+  const message =
+    `Pactory verification\n` +
+    `Address: ${address}\n` +
+    `Action: ${action}\n` +
+    `Pact ID: ${pactId}\n` +
+    `Nonce: ${nonce}\n` +
+    `IssuedAt: ${issuedAt}`;
+
+  // 4) Sign (popup)
+  let signature;
+  try {
+    const browserProvider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await browserProvider.getSigner();
+    signature = await withTimeout(
+      signer.signMessage(message),
+      60000,
+      "MetaMask signature"
+    );
+  } catch (e) {
+    alert(
+      `Signature failed (MetaMask may be locked, popup blocked, or request pending):\n\n${
+        e?.message || e
+      }`
+    );
+    return false;
+  }
+
+  // 5) Verify signature
+  const recovered = ethers.verifyMessage(message, signature).toLowerCase();
+  if (recovered !== address.toLowerCase()) {
+    alert("Signature verification failed (recovered address mismatch).");
+    return false;
+  }
+
+  // 6) Store signature and message
+  const storageKey = `pactActionSig:${address.toLowerCase()}:${action}:${pactId}`;
+  localStorage.setItem(storageKey, signature);
+  localStorage.setItem(`${storageKey}:msg`, message);
+
+  return { signature, message };
+}
+
+function isValidVideoPlatform(url) {
+  const u = String(url || "").toLowerCase();
+  
+  // Check for TikTok
+  if (u.includes("tiktok.com")) return { valid: true, platform: "TikTok" };
+  
+  // Check for Instagram (including Reels)
+  if (u.includes("instagram.com") || u.includes("instagr.am")) {
+    return { valid: true, platform: "Instagram" };
+  }
+  
+  // Check for YouTube Shorts
+  if (u.includes("youtube.com/shorts/") || (u.includes("youtube.com") && u.includes("shorts"))) {
+    return { valid: true, platform: "YouTube Shorts" };
+  }
+  
+  // Also accept regular YouTube URLs (youtu.be or youtube.com/watch)
+  if (u.includes("youtu.be/") || (u.includes("youtube.com") && u.includes("watch"))) {
+    return { valid: true, platform: "YouTube" };
+  }
+  
+  return { 
+    valid: false, 
+    error: "Unsupported platform. Please use TikTok, Instagram, or YouTube Shorts links." 
+  };
+}
+
 function prettyAddr(a) {
+  if (!a) return a;
+  // Check if address has a saved name
+  if (window.getAddressName) {
+    const name = window.getAddressName(a);
+    if (name) {
+      return `${name} (${a})`;
+    }
+  }
   return a;
+}
+
+// Payout graph helper functions for pact-view
+const X_INF_PACT_VIEW = "__INF__";
+
+function collectKeyViewsWithInfinityForPact(pact) {
+  const set = new Set();
+  set.add(0);
+
+  if (pact.progress_enabled && Array.isArray(pact.progress_milestones)) {
+    for (const m of pact.progress_milestones) {
+      const v = Number(m?.views || 0);
+      if (Number.isInteger(v) && v > 0) set.add(v);
+    }
+  }
+
+  if (pact.aon_enabled && Array.isArray(pact.aon_rewards)) {
+    for (const r of pact.aon_rewards) {
+      const v = Number(r?.views || 0);
+      if (Number.isInteger(v) && v > 0) set.add(v);
+    }
+  }
+
+  const numeric = Array.from(set).sort((a, b) => a - b);
+  return [...numeric, X_INF_PACT_VIEW];
+}
+
+function progressPayoutAtViewsForPact(pact, x) {
+  if (!pact.progress_enabled || !Array.isArray(pact.progress_milestones)) return 0;
+
+  const ms = pact.progress_milestones
+    .map((m) => ({ v: Number(m?.views || 0), p: Number(m?.payout || 0) }))
+    .filter((m) => Number.isInteger(m.v) && m.v > 0 && Number.isFinite(m.p) && m.p > 0)
+    .sort((a, b) => a.v - b.v);
+
+  if (ms.length === 0) return 0;
+  if (x < ms[0].v) return 0;
+
+  for (let i = 0; i < ms.length - 1; i++) {
+    const a = ms[i];
+    const b = ms[i + 1];
+    if (x < b.v) {
+      const t = (x - a.v) / (b.v - a.v);
+      return a.p + t * (b.p - a.p);
+    }
+  }
+  return ms[ms.length - 1].p;
+}
+
+function aonBonusAtViewsForPact(pact, x) {
+  if (!pact.aon_enabled || !Array.isArray(pact.aon_rewards)) return 0;
+
+  const rewards = pact.aon_rewards
+    .map((r) => ({ v: Number(r?.views || 0), p: Number(r?.payout || 0) }))
+    .filter((r) => Number.isInteger(r.v) && r.v > 0 && Number.isFinite(r.p) && r.p > 0);
+
+  let sum = 0;
+  for (const r of rewards) {
+    if (x >= r.v) sum += r.p;
+  }
+  return sum;
+}
+
+function aonBonusBeforeViewsForPact(pact, k) {
+  if (!pact.aon_enabled || !Array.isArray(pact.aon_rewards)) return 0;
+  if (!Number.isFinite(k)) return 0;
+
+  const rewards = pact.aon_rewards
+    .map((r) => ({ v: Number(r?.views || 0), p: Number(r?.payout || 0) }))
+    .filter((r) => Number.isInteger(r.v) && r.v > 0 && Number.isFinite(r.p) && r.p > 0);
+
+  let sum = 0;
+  for (const r of rewards) {
+    if (r.v < k) sum += r.p;
+  }
+  return sum;
+}
+
+function makeOrdinalScaleXForPact(keys, padL, innerW) {
+  const n = keys.length;
+  const pos = new Map();
+  const step = n <= 1 ? 0 : innerW / (n - 1);
+  keys.forEach((k, i) => pos.set(k, padL + i * step));
+  return (k) => pos.get(k);
+}
+
+function formatXKeyForPact(k) {
+  return k === X_INF_PACT_VIEW ? "∞" : String(k);
+}
+
+function niceStepForPact(rawStep) {
+  const exp = Math.floor(Math.log10(rawStep));
+  const base = Math.pow(10, exp);
+  const f = rawStep / base;
+
+  if (f <= 1) return 1 * base;
+  if (f <= 2) return 2 * base;
+  if (f <= 5) return 5 * base;
+  return 10 * base;
+}
+
+function makeNiceTicksForPact(maxVal, target = 6) {
+  if (maxVal <= 0) return [0];
+  const step = niceStepForPact(maxVal / target);
+  const top = Math.ceil(maxVal / step) * step;
+
+  const ticks = [];
+  for (let v = 0; v <= top + 1e-9; v += step) ticks.push(v);
+  return ticks;
+}
+
+function formatMoneyTickForPact(v) {
+  if (v >= 1000) {
+    return `$${v.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+  return `$${v.toFixed(2)}`;
+}
+
+function renderPactPayoutGraph(pact) {
+  const graphEl = document.getElementById("pactViewPayoutGraph");
+  if (!graphEl) return;
+
+  const w = 680;
+  const h = 240;
+  const padL = 90;
+  const padR = 20;
+  const padT = 30;
+  const padB = 50;
+
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+
+  graphEl.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  graphEl.innerHTML = "";
+
+  graphEl.innerHTML += `<rect x="0" y="0" width="${w}" height="${h}" fill="#FAFBFF" rx="8"/>`;
+
+  graphEl.innerHTML += `
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + innerH}" stroke="#1976D2" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="${padL}" y1="${padT + innerH}" x2="${padL + innerW}" y2="${padT + innerH}" stroke="#1976D2" stroke-width="2.5" stroke-linecap="round"/>
+  `;
+
+  graphEl.innerHTML += `
+    <text x="${padL + innerW / 2}" y="${h - 12}" font-size="13" fill="#1565C0" font-weight="600" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">Views</text>
+    <text x="20" y="${padT + innerH / 2}" font-size="13" fill="#1565C0" font-weight="600" transform="rotate(-90, 20, ${padT + innerH / 2})" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">Payout ($)</text>
+  `;
+
+  const keys = collectKeyViewsWithInfinityForPact(pact);
+  const hasAnyThreshold = keys.some((k) => k !== 0 && k !== X_INF_PACT_VIEW);
+
+  if (!hasAnyThreshold) {
+    const axisY = padT + innerH;
+    const x0 = padL;
+    const xInf = padL + innerW;
+
+    graphEl.innerHTML += `
+      <line x1="${x0}" y1="${axisY}" x2="${x0}" y2="${axisY + 6}" stroke="#1976D2" stroke-width="2" stroke-linecap="round"/>
+      <text x="${x0}" y="${axisY + 22}" font-size="11" fill="#1565C0" font-weight="600" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">0</text>
+      <line x1="${xInf}" y1="${axisY}" x2="${xInf}" y2="${axisY + 6}" stroke="#1976D2" stroke-width="2" stroke-linecap="round"/>
+      <text x="${xInf}" y="${axisY + 22}" font-size="11" fill="#1565C0" font-weight="600" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">∞</text>
+    `;
+    return;
+  }
+
+  const sx = makeOrdinalScaleXForPact(keys, padL, innerW);
+
+  const pts = keys.map((k) => {
+    if (k === X_INF_PACT_VIEW) {
+      const y = progressPayoutAtViewsForPact(pact, Number.MAX_SAFE_INTEGER) + aonBonusAtViewsForPact(pact, Number.MAX_SAFE_INTEGER);
+      return { k, yBefore: y, yAfter: y };
+    }
+
+    const progress = progressPayoutAtViewsForPact(pact, k);
+    const yBefore = progress + aonBonusBeforeViewsForPact(pact, k);
+    const yAfter = progress + aonBonusAtViewsForPact(pact, k);
+    return { k, yBefore, yAfter };
+  });
+
+  const maxY = Math.max(1, ...pts.map((p) => Math.max(p.yBefore, p.yAfter)));
+
+  let yTicks = makeNiceTicksForPact(maxY, 6);
+  const currentMax = Math.max(...yTicks);
+  if (currentMax < maxY) {
+    yTicks = yTicks.filter(t => t <= maxY);
+    if (!yTicks.includes(maxY)) {
+      yTicks.push(maxY);
+    }
+    yTicks.sort((a, b) => a - b);
+  } else if (currentMax > maxY) {
+    yTicks = yTicks.filter(t => t < currentMax);
+    yTicks.push(maxY);
+    yTicks.sort((a, b) => a - b);
+  } else {
+    yTicks.sort((a, b) => a - b);
+  }
+
+  const scaleMaxY = Math.max(...yTicks);
+  const sy = (y) => padT + innerH - (y / scaleMaxY) * innerH;
+
+  for (const yVal of yTicks) {
+    const y = sy(yVal);
+
+    graphEl.innerHTML += `
+      <line x1="${padL}" y1="${y}" x2="${padL + innerW}" y2="${y}" stroke="#E3F2FD" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
+      <line x1="${padL - 5}" y1="${y}" x2="${padL}" y2="${y}" stroke="#1976D2" stroke-width="2" stroke-linecap="round"/>
+      <text x="${padL - 15}" y="${y + 4}" font-size="11" fill="#1565C0" font-weight="600" text-anchor="end" font-family="system-ui, -apple-system, sans-serif">${formatMoneyTickForPact(yVal)}</text>
+    `;
+  }
+
+  const maxLabels = 8;
+  const showIdx = new Set();
+  showIdx.add(0);
+  showIdx.add(keys.length - 1);
+
+  if (keys.length > maxLabels) {
+    const step = Math.ceil((keys.length - 2) / (maxLabels - 2));
+    for (let i = step; i < keys.length - 1; i += step) showIdx.add(i);
+  } else {
+    for (let i = 1; i < keys.length - 1; i++) showIdx.add(i);
+  }
+
+  const axisY = padT + innerH;
+  keys.forEach((k, i) => {
+    if (!showIdx.has(i)) return;
+    const x = sx(k);
+
+    graphEl.innerHTML += `
+      <line x1="${x}" y1="${padT}" x2="${x}" y2="${axisY}" stroke="#E3F2FD" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
+      <line x1="${x}" y1="${axisY}" x2="${x}" y2="${axisY + 6}" stroke="#1976D2" stroke-width="2" stroke-linecap="round"/>
+      <text x="${x}" y="${axisY + 22}" font-size="11" fill="#1565C0" font-weight="600" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">${formatXKeyForPact(k)}</text>
+    `;
+  });
+
+  let defs = graphEl.querySelector("defs");
+  if (!defs) {
+    defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    graphEl.appendChild(defs);
+  }
+
+  const gradientId = "pact-view-payout-gradient";
+  if (!graphEl.querySelector(`#${gradientId}`)) {
+    const gradient = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
+    gradient.id = gradientId;
+    gradient.setAttribute("x1", "0%");
+    gradient.setAttribute("y1", "0%");
+    gradient.setAttribute("x2", "0%");
+    gradient.setAttribute("y2", "100%");
+
+    const stop1 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+    stop1.setAttribute("offset", "0%");
+    stop1.setAttribute("stop-color", "#2196F3");
+    stop1.setAttribute("stop-opacity", "1");
+
+    const stop2 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+    stop2.setAttribute("offset", "100%");
+    stop2.setAttribute("stop-color", "#42A5F5");
+    stop2.setAttribute("stop-opacity", "1");
+
+    gradient.appendChild(stop1);
+    gradient.appendChild(stop2);
+    defs.appendChild(gradient);
+  }
+
+  const areaGradientId = "pact-view-area-gradient";
+  if (!graphEl.querySelector(`#${areaGradientId}`)) {
+    const areaGradient = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
+    areaGradient.id = areaGradientId;
+    areaGradient.setAttribute("x1", "0%");
+    areaGradient.setAttribute("y1", "0%");
+    areaGradient.setAttribute("x2", "0%");
+    areaGradient.setAttribute("y2", "100%");
+
+    const stop1 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+    stop1.setAttribute("offset", "0%");
+    stop1.setAttribute("stop-color", "#2196F3");
+    stop1.setAttribute("stop-opacity", "0.2");
+
+    const stop2 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+    stop2.setAttribute("offset", "100%");
+    stop2.setAttribute("stop-color", "#42A5F5");
+    stop2.setAttribute("stop-opacity", "0.05");
+
+    areaGradient.appendChild(stop1);
+    areaGradient.appendChild(stop2);
+    defs.appendChild(areaGradient);
+  }
+
+  const shadowFilterId = "pact-view-line-shadow";
+  if (!graphEl.querySelector(`#${shadowFilterId}`)) {
+    const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+    filter.id = shadowFilterId;
+    filter.setAttribute("x", "-50%");
+    filter.setAttribute("y", "-50%");
+    filter.setAttribute("width", "200%");
+    filter.setAttribute("height", "200%");
+
+    const feGaussianBlur = document.createElementNS("http://www.w3.org/2000/svg", "feGaussianBlur");
+    feGaussianBlur.setAttribute("in", "SourceAlpha");
+    feGaussianBlur.setAttribute("stdDeviation", "3");
+    feGaussianBlur.setAttribute("result", "blur");
+    filter.appendChild(feGaussianBlur);
+
+    const feOffset = document.createElementNS("http://www.w3.org/2000/svg", "feOffset");
+    feOffset.setAttribute("dx", "2");
+    feOffset.setAttribute("dy", "2");
+    feOffset.setAttribute("result", "offsetblur");
+    filter.appendChild(feOffset);
+
+    const transfer = document.createElementNS("http://www.w3.org/2000/svg", "feComponentTransfer");
+    const funcA = document.createElementNS("http://www.w3.org/2000/svg", "feFuncA");
+    funcA.setAttribute("type", "linear");
+    funcA.setAttribute("slope", "0.3");
+    transfer.appendChild(funcA);
+    filter.appendChild(transfer);
+
+    const merge = document.createElementNS("http://www.w3.org/2000/svg", "feMerge");
+    const mergeNode1 = document.createElementNS("http://www.w3.org/2000/svg", "feMergeNode");
+    mergeNode1.setAttribute("in", "offsetblur");
+    merge.appendChild(mergeNode1);
+    const mergeNode2 = document.createElementNS("http://www.w3.org/2000/svg", "feMergeNode");
+    mergeNode2.setAttribute("in", "SourceGraphic");
+    merge.appendChild(mergeNode2);
+    filter.appendChild(merge);
+
+    defs.appendChild(filter);
+  }
+
+  let areaPath = `M ${sx(pts[0].k)} ${padT + innerH} L ${sx(pts[0].k)} ${sy(pts[0].yAfter)} `;
+  let linePath = `M ${sx(pts[0].k)} ${sy(pts[0].yAfter)} `;
+
+  for (let i = 1; i < pts.length; i++) {
+    const cur = pts[i];
+    const xCur = sx(cur.k);
+
+    linePath += `L ${xCur} ${sy(cur.yBefore)} `;
+    areaPath += `L ${xCur} ${sy(cur.yBefore)} `;
+
+    if (Math.abs(cur.yAfter - cur.yBefore) > 1e-9) {
+      linePath += `L ${xCur} ${sy(cur.yAfter)} `;
+      areaPath += `L ${xCur} ${sy(cur.yAfter)} `;
+    }
+  }
+
+  const lastX = sx(pts[pts.length - 1].k);
+  areaPath += `L ${lastX} ${padT + innerH} Z`;
+
+  graphEl.innerHTML += `<path d="${areaPath}" fill="url(#${areaGradientId})" opacity="0.6"/>`;
+  graphEl.innerHTML += `<path d="${linePath}" fill="none" stroke="url(#${gradientId})" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#${shadowFilterId})"/>`;
 }
 
 function prettyStatus(s) {
@@ -197,7 +689,9 @@ async function getMneeBalanceAndDecimals(userAddress) {
     "function decimals() view returns (uint8)",
   ];
 
-  const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
+  // Use current environment's MNEE address
+  const mneeAddress = getMNEEAddress();
+  const token = new ethers.Contract(mneeAddress, ERC20_ABI, provider);
   const [raw, decimals] = await Promise.all([
     token.balanceOf(userAddress),
     token.decimals(),
@@ -262,8 +756,8 @@ const replacedHtml = data.replaced_pact
           <div style="margin-top:8px; border:1px solid #ddd; border-radius:10px; padding:12px;">
             <div><strong>Name:</strong> ${rp.name || "Untitled Pact"}</div>
             <div><strong>Status:</strong> ${prettyStatus(rp.status)}</div>
-            <div><strong>Sponsor:</strong> ${rp.sponsor_address}</div>
-            <div><strong>Creator:</strong> ${rp.creator_address}</div>
+            <div><strong>Sponsor:</strong> ${rp.sponsor_address}${normAddr(rp.sponsor_address) === normAddr(address) ? ' <span style="color: #1976D2; font-weight: 600;">(You)</span>' : ''}</div>
+            <div><strong>Creator:</strong> ${rp.creator_address}${normAddr(rp.creator_address) === normAddr(address) ? ' <span style="color: #1976D2; font-weight: 600;">(You)</span>' : ''}</div>
             <div><strong>Duration:</strong> ${formatDuration(
               rp.duration_seconds
             )}</div>
@@ -361,8 +855,10 @@ async function getTokenDecimals() {
   if (!window.ethereum) throw new Error("MetaMask not found");
   const browserProvider = new ethers.BrowserProvider(window.ethereum);
   const ERC20_READ_ABI = ["function decimals() view returns (uint8)"];
+  // Use current environment's MNEE address
+  const mneeAddress = getMNEEAddress();
   const token = new ethers.Contract(
-    MNEE_ADDRESS,
+    mneeAddress,
     ERC20_READ_ABI,
     browserProvider
   );
@@ -510,8 +1006,8 @@ if (data.replaced_pact) {
     <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
       <div><strong>Name:</strong> ${rp.name || "Untitled Pact"}</div>
       <div><strong>Status:</strong> ${rp.status}</div>
-      <div><strong>Sponsor:</strong> ${rp.sponsor_address}</div>
-      <div><strong>Creator:</strong> ${rp.creator_address}</div>
+      <div><strong>Sponsor:</strong> ${rp.sponsor_address}${normAddr(rp.sponsor_address) === normAddr(address) ? ' <span style="color: #1976D2; font-weight: 600;">(You)</span>' : ''}</div>
+      <div><strong>Creator:</strong> ${rp.creator_address}${normAddr(rp.creator_address) === normAddr(address) ? ' <span style="color: #1976D2; font-weight: 600;">(You)</span>' : ''}</div>
       <div><strong>Duration:</strong> ${formatDuration(
         rp.duration_seconds
       )}</div>
@@ -551,10 +1047,10 @@ const oldPanelHtml = `
     )}</div>
     <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Sponsor:</strong> ${prettyAddr(
       p.sponsor_address
-    )}</div>
+    )}${normAddr(p.sponsor_address) === normAddr(address) ? ' <span style="color: #1976D2; font-weight: 600;">(You)</span>' : ''}</div>
     <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Creator:</strong> ${prettyAddr(
       p.creator_address
-    )}</div>
+    )}${normAddr(p.creator_address) === normAddr(address) ? ' <span style="color: #1976D2; font-weight: 600;">(You)</span>' : ''}</div>
 
     <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(33, 150, 243, 0.1);"><strong>Max payout:</strong> $${
       Number.isFinite(maxPayout) ? maxPayout.toFixed(2) : "-"
@@ -583,6 +1079,16 @@ const oldPanelHtml = `
       false
     )}
   </div>
+
+  <details class="payout-graph-details" style="margin-top: 20px;">
+    <summary style="cursor: pointer; font-weight: 600; font-size: 1.125rem; color: #1E3A5F; padding: 12px; background: #E3F2FD; border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.2); list-style: none; display: flex; align-items: center; justify-content: space-between;">
+      <span>Payout Visualization</span>
+      <span class="dropdown-arrow" style="transition: transform 0.2s; display: inline-block; font-size: 0.875rem; color: #1976D2;">▼</span>
+    </summary>
+    <div style="margin-top: 16px; padding: 16px; background: #FAFBFF; border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.15);">
+      <svg id="pactViewPayoutGraph" width="680" height="240" style="width: 100%; height: auto; max-width: 680px; border: 1px solid rgba(33, 150, 243, 0.2); border-radius: 10px; background: linear-gradient(135deg, #FAFBFF 0%, #F5F9FF 100%);"></svg>
+    </div>
+  </details>
 `;
 
 const oldDetails = document.getElementById("oldPactDetails");
@@ -595,10 +1101,20 @@ if (isActivePact(p) && oldDetails && oldBody) {
 
   // And make sure contentEl starts empty so you don't see a duplicate
   contentEl.innerHTML = "";
+  
+  // Render payout graph after content is inserted
+  setTimeout(() => {
+    renderPactPayoutGraph(p);
+  }, 100);
 } else {
   // Non-active pact: show old info normally (no dropdown)
   if (oldDetails) oldDetails.style.display = "none";
   contentEl.innerHTML = replacedHtml + oldPanelHtml;
+  
+  // Render payout graph after content is inserted
+  setTimeout(() => {
+    renderPactPayoutGraph(p);
+  }, 100);
 }
 
 // --------------------
@@ -794,6 +1310,9 @@ if (isActivePact(p)) {
     errEl.style.display = "none";
     errEl.innerText = "";
 
+    // Show loading screen
+    showSecondaryLoadingScreen("Refreshing view counts... This may take a moment.");
+
     try {
       const stats = await fetchActiveStats(pactId); // ONE call
 
@@ -833,10 +1352,15 @@ if (isActivePact(p)) {
 
       // keep p in sync for Claim checks (cached_available/cached_unlocked)
       p = await fetchLatestPact(pactId);
+      
+      // Hide loading screen on success
+      hideSecondaryLoadingScreen();
     } catch (err) {
       console.error("[REFRESH ERROR]", err);
       errEl.style.display = "block";
       errEl.innerText = err?.message || String(err);
+      // Hide loading screen on error
+      hideSecondaryLoadingScreen();
     } finally {
       refreshBtn.disabled = false;
     }
@@ -891,6 +1415,14 @@ if (isActivePact(p)) {
         `Claim ${realAvailableUsd.toFixed(2)} MNEE to your creator wallet?`
       );
       if (!ok) return;
+
+      // ------------------------------------------------------------------
+      // 3.5) Signature verification
+      // ------------------------------------------------------------------
+      const sigResult = await verifySignatureForAction("claim", id);
+      if (!sigResult) {
+        return; // User cancelled or verification failed
+      }
 
       // ------------------------------------------------------------------
       // 4) MetaMask checks
@@ -1019,6 +1551,18 @@ if (canInputVideoLink) {
         "Link must start with http:// or https:// and contain no spaces."
       );
     }
+    
+    // Validate platform support
+    const platformCheck = isValidVideoPlatform(trimmed);
+    if (!platformCheck.valid) {
+      return alert(platformCheck.error);
+    }
+
+    // Signature verification
+    const sigResult = await verifySignatureForAction("input_video_link", id);
+    if (!sigResult) {
+      return; // User cancelled or verification failed
+    }
 
     videoBtn.disabled = true;
 
@@ -1028,7 +1572,12 @@ if (canInputVideoLink) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address, videoLink: trimmed }),
+          body: JSON.stringify({ 
+            address, 
+            videoLink: trimmed,
+            signature: sigResult.signature,
+            message: sigResult.message
+          }),
         }
       );
 
@@ -1072,24 +1621,24 @@ if (canApproveAndFund) {
 
   fundBtn.onclick = async () => {
     try {
-      // Must be MetaMask + sponsor
-      if (!window.ethereum) {
-        alert("MetaMask not found.");
-        return;
-      }
+    // Must be MetaMask + sponsor
+    if (!window.ethereum) {
+      alert("MetaMask not found.");
+      return;
+    }
 
       // ✅ 1) compute required max payout (MNEE units in UI)
       const required = maxPayoutMnee(p);
-      const link = String(p.video_link || "").trim();
+    const link = String(p.video_link || "").trim();
 
-      if (!Number.isFinite(required) || required <= 0) {
-        alert("Cannot fund: pact has no valid payout amounts.");
-        return;
-      }
+    if (!Number.isFinite(required) || required <= 0) {
+      alert("Cannot fund: pact has no valid payout amounts.");
+      return;
+    }
       if (!link) {
         alert("Cannot fund: missing video link.");
-        return;
-      }
+      return;
+    }
 
       // ✅ 2) read-only provider first (NO signer yet) + check chain
       const browserProvider = new ethers.BrowserProvider(window.ethereum);
@@ -1120,8 +1669,10 @@ if (canApproveAndFund) {
         "function balanceOf(address) view returns (uint256)",
         "function decimals() view returns (uint8)",
       ];
+      // Use current environment's MNEE address
+      const mneeAddress = getMNEEAddress();
       const tokenRead = new ethers.Contract(
-        MNEE_ADDRESS,
+        mneeAddress,
         ERC20_READ_ABI,
         browserProvider
       );
@@ -1146,54 +1697,55 @@ if (canApproveAndFund) {
       }
 
       // ✅ 4) confirm AFTER we know user can actually fund
-      const ok = confirm(
-        `Before you approve and fund:\n\n` +
+    const ok = confirm(
+      `Before you approve and fund:\n\n` +
           `• Verify the video link:\n  ${link}\n\n` +
-          `• This will (1) create the on-chain pact if needed, (2) approve MNEE, (3) fund the pact.\n\n` +
-          `Max funding required: ${required.toFixed(2)} MNEE\n\n` +
-          `Continue?`
-      );
-      if (!ok) return;
+        `• This will (1) create the on-chain pact if needed, (2) approve MNEE, (3) fund the pact.\n\n` +
+        `Max funding required: ${required.toFixed(2)} MNEE\n\n` +
+        `Continue?`
+    );
+    if (!ok) return;
 
-      fundBtn.disabled = true;
-      fundBtn.style.opacity = "0.7";
-      fundBtn.style.cursor = "not-allowed";
+    fundBtn.disabled = true;
+    fundBtn.style.opacity = "0.7";
+    fundBtn.style.cursor = "not-allowed";
 
-      // Show loading screen
-      showSecondaryLoadingScreen();
+      // Show loading screen immediately with informative message
+      showSecondaryLoadingScreen("Processing transaction... This may take a minute. Please wait.");
 
-      try {
+    try {
         // ✅ 5) get signer (MetaMask) AFTER checks
-        const signer = await browserProvider.getSigner();
+      const signer = await browserProvider.getSigner();
 
-        // sanity: make sure the connected wallet matches the logged-in address
-        const signerAddr = await signer.getAddress();
-        if (normAddr(signerAddr) !== normAddr(address)) {
+      // sanity: make sure the connected wallet matches the logged-in address
+      const signerAddr = await signer.getAddress();
+      if (normAddr(signerAddr) !== normAddr(address)) {
           // Hide loading screen on early return
           hideSecondaryLoadingScreen();
-          alert(
-            `MetaMask account mismatch.\n\n` +
-              `Logged in as: ${address}\n` +
-              `MetaMask is: ${signerAddr}\n\n` +
-              `Switch accounts in MetaMask and try again.`
-          );
-          fundBtn.disabled = false;
-          fundBtn.style.opacity = "1";
-          fundBtn.style.cursor = "pointer";
-          return;
-        }
-
-        const escrow = new ethers.Contract(
-          PACT_ESCROW_ADDRESS,
-          PactEscrowABI,
-          signer
+        alert(
+          `MetaMask account mismatch.\n\n` +
+            `Logged in as: ${address}\n` +
+            `MetaMask is: ${signerAddr}\n\n` +
+            `Switch accounts in MetaMask and try again.`
         );
+        fundBtn.disabled = false;
+        fundBtn.style.opacity = "1";
+        fundBtn.style.cursor = "pointer";
+        return;
+      }
 
-        const ERC20_ABI = [
-          "function approve(address spender, uint256 amount) returns (bool)",
-          "function allowance(address owner, address spender) view returns (uint256)",
-        ];
-        const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
+      const escrow = new ethers.Contract(
+        PACT_ESCROW_ADDRESS,
+        PactEscrowABI,
+        signer
+      );
+
+      const ERC20_ABI = [
+        "function approve(address spender, uint256 amount) returns (bool)",
+        "function allowance(address owner, address spender) view returns (uint256)",
+      ];
+      // Use current environment's MNEE address (reuse mneeAddress from earlier in function)
+      const token = new ethers.Contract(mneeAddress, ERC20_ABI, signer);
 
         // ✅ 6) create pact on-chain IF it doesn't exist yet
         let onchain = null;
@@ -1254,6 +1806,43 @@ if (canApproveAndFund) {
         if (allowance < needRaw) {
           const txApprove = await token.approve(PACT_ESCROW_ADDRESS, needRaw);
           await txApprove.wait();
+          
+          // Verify approval went through
+          const newAllowance = await token.allowance(address, PACT_ESCROW_ADDRESS);
+          if (newAllowance < needRaw) {
+            throw new Error(`Approval failed. Allowance is ${ethers.formatUnits(newAllowance, decimals)} but need ${ethers.formatUnits(needRaw, decimals)}`);
+          }
+        }
+
+        // ✅ 7.5) Check on-chain pact state before funding
+        let onchainPact;
+        try {
+          onchainPact = await escrow.pacts(id);
+        } catch (e) {
+          throw new Error(`Failed to read pact from contract: ${e.message}`);
+        }
+        
+        const onchainSponsor = String(onchainPact.sponsor);
+        const onchainStatus = Number(onchainPact.status);
+        const onchainDeadline = Number(onchainPact.deadline);
+        const currentTime = Math.floor(Date.now() / 1000);
+        
+        // Status enum: 0 = Created, 1 = Funded, 2 = Closed
+        if (onchainSponsor === "0x0000000000000000000000000000000000000000") {
+          throw new Error("Pact does not exist on-chain. Please ensure the pact was created successfully.");
+        }
+        
+        if (normAddr(onchainSponsor) !== normAddr(address)) {
+          throw new Error(`Pact sponsor mismatch. On-chain: ${onchainSponsor}, Your address: ${address}`);
+        }
+        
+        if (onchainStatus !== 0) {
+          const statusNames = ["Created", "Funded", "Closed"];
+          throw new Error(`Pact is not in Created status. Current status: ${statusNames[onchainStatus] || "Unknown"}`);
+        }
+        
+        if (currentTime > onchainDeadline) {
+          throw new Error(`Pact deadline has passed. Deadline: ${new Date(onchainDeadline * 1000).toLocaleString()}, Current: ${new Date().toLocaleString()}`);
         }
 
         // ✅ 8) fund(pactId) — contract pulls pact.maxPayout
@@ -1288,7 +1877,8 @@ if (canApproveAndFund) {
         "function approve(address spender, uint256 amount) returns (bool)",
         "function allowance(address owner, address spender) view returns (uint256)",
       ];
-      const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, signer);
+      // Use current environment's MNEE address (reuse mneeAddress from earlier in function)
+      const token = new ethers.Contract(mneeAddress, ERC20_ABI, signer);
 
       // ✅ 6) create pact on-chain IF it doesn't exist yet
       let onchain = null;
@@ -1412,7 +2002,17 @@ if (canNegotiate) {
   negotiateBtn.style.border = "none";
   negotiateBtn.style.cursor = "pointer";
 
-  negotiateBtn.onclick = () => {
+  negotiateBtn.onclick = async () => {
+    // Signature verification
+    const sigResult = await verifySignatureForAction("negotiate", id);
+    if (!sigResult) {
+      return; // User cancelled or verification failed
+    }
+    
+    // Store signature for negotiate page
+    localStorage.setItem(`pactNegotiateSig:${address.toLowerCase()}:${id}`, sigResult.signature);
+    localStorage.setItem(`pactNegotiateMsg:${address.toLowerCase()}:${id}`, sigResult.message);
+    
     window.location.href = `./pactory.html?mode=negotiate&id=${encodeURIComponent(
       id
     )}`;
@@ -1440,6 +2040,12 @@ if (canAccept) {
     const ok = confirm("Accept this pact? This will mark it as Created.");
     if (!ok) return;
 
+    // Signature verification
+    const sigResult = await verifySignatureForAction("accept", id);
+    if (!sigResult) {
+      return; // User cancelled or verification failed
+    }
+
     acceptBtn.disabled = true;
     acceptBtn.style.opacity = "0.7";
     acceptBtn.style.cursor = "not-allowed";
@@ -1450,7 +2056,11 @@ if (canAccept) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address }),
+          body: JSON.stringify({ 
+            address,
+            signature: sigResult.signature,
+            message: sigResult.message
+          }),
         }
       );
 
@@ -1481,9 +2091,9 @@ if (canAccept) {
 let actionLabel = null;
 
 if (String(p.status) !== "active") {
-  if (mode === "sent") actionLabel = "Delete";
-  if (mode === "awaiting") actionLabel = "Reject";
-  if (mode === "created") actionLabel = "Delete";
+if (mode === "sent") actionLabel = "Delete";
+if (mode === "awaiting") actionLabel = "Reject";
+if (mode === "created") actionLabel = "Delete";
 }
 
 if (actionLabel) {
@@ -1509,6 +2119,13 @@ if (actionLabel) {
     const ok = confirm(msg);
     if (!ok) return;
 
+    // Signature verification
+    const action = actionLabel === "Reject" ? "reject" : "delete";
+    const sigResult = await verifySignatureForAction(action, id);
+    if (!sigResult) {
+      return; // User cancelled or verification failed
+    }
+
     btn.disabled = true;
     btn.style.opacity = "0.7";
     btn.style.cursor = "not-allowed";
@@ -1524,7 +2141,14 @@ if (actionLabel) {
               id
             )}?address=${encodeURIComponent(address)}`;
 
-      const delRes = await fetch(endpoint, { method: "DELETE" });
+      const delRes = await fetch(endpoint, { 
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signature: sigResult.signature,
+          message: sigResult.message
+        })
+      });
       const delData = await delRes.json().catch(() => ({}));
 
       if (!delRes.ok || !delData.ok) {

@@ -20,8 +20,8 @@
               inset 0 0 20px rgba(25, 118, 210, 0.2);
   pointer-events: none;
   z-index: 9999;
-  transition: all 0.3s ease-out;
-  animation: highlight-pulse 2s ease-in-out infinite;
+  transition: all 0.2s ease-out;
+  /* Removed animation to prevent flashing */
 }
 
 .walkthrough-highlight::after {
@@ -31,8 +31,8 @@
   left: -3px;
   right: -3px;
   bottom: -3px;
-  pointer-events: auto;
-  z-index: 10000;
+  pointer-events: none; /* Changed to none to allow interactions with highlighted element */
+  z-index: -1; /* Lower z-index so it doesn't block */
 }
 
 @keyframes highlight-pulse {
@@ -56,9 +56,12 @@
   max-width: 400px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
               0 0 0 1px rgba(25, 118, 210, 0.1);
-  z-index: 10000;
+  z-index: 10002; /* Higher than highlight to ensure buttons are clickable */
   animation: tooltip-appear 0.3s ease-out;
   pointer-events: auto;
+  /* Ensure tooltip and its children are always interactive */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 @keyframes tooltip-appear {
@@ -197,34 +200,43 @@
   position: absolute;
   width: 0;
   height: 0;
-  border: 10px solid transparent;
+  border: 12px solid transparent;
+  z-index: -1; /* Place arrow behind tooltip content but visible */
 }
 
+/* Arrow pointing UP (tooltip is below element) */
 .walkthrough-tooltip.tooltip-top::before {
-  bottom: -20px;
+  top: -24px; /* Position above tooltip */
   left: 50%;
   transform: translateX(-50%);
-  border-top-color: white;
+  border-bottom-color: white; /* Arrow points up */
+  border-top: none;
 }
 
+/* Arrow pointing DOWN (tooltip is above element) */
 .walkthrough-tooltip.tooltip-bottom::before {
-  top: -20px;
+  bottom: -24px; /* Position below tooltip */
   left: 50%;
   transform: translateX(-50%);
-  border-bottom-color: white;
+  border-top-color: white; /* Arrow points down */
+  border-bottom: none;
 }
 
+/* Arrow pointing RIGHT (tooltip is to the left of element) */
 .walkthrough-tooltip.tooltip-left::before {
-  right: -20px;
+  left: -24px; /* Position to the left of tooltip */
   top: 50%;
   transform: translateY(-50%);
-  border-left-color: white;
+  border-right-color: white; /* Arrow points right */
+  border-left: none;
 }
 
+/* Arrow pointing LEFT (tooltip is to the right of element) */
 .walkthrough-tooltip.tooltip-right::before {
-  left: -20px;
+  right: -24px; /* Position to the right of tooltip */
   top: 50%;
   transform: translateY(-50%);
-  border-right-color: white;
+  border-left-color: white; /* Arrow points left */
+  border-right: none;
 }
 

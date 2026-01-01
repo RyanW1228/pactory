@@ -1,5 +1,5 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS } from "./constants.js";
+import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS, getEnvironment, getMNEEAddress } from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
 
 const ERC20ABI = [
@@ -70,6 +70,18 @@ function getViewMode() {
   return localStorage.getItem(viewModeKey(address)) || "sponsor";
 }
 
+// Helper function to format address with name
+function formatAddressWithName(addr) {
+  if (!addr) return addr;
+  // Check if address has a saved name
+  const nameKey = `addressName:${addr.toLowerCase()}`;
+  const name = localStorage.getItem(nameKey);
+  if (name) {
+    return `${name} (${addr})`;
+  }
+  return addr;
+}
+
 async function setViewMode(mode) {
   localStorage.setItem(viewModeKey(address), mode);
   await refreshDashboard();
@@ -117,6 +129,11 @@ async function refreshDashboard() {
   dashboardTitle.innerText =
     mode === "sponsor" ? "Your Sponsor Pacts" : "Your Creator Pacts";
   currentViewSpan.innerText = mode === "sponsor" ? "Sponsor" : "Creator";
+  
+  // Update toggle state: checked = creator, unchecked = sponsor
+  if (toggleViewButton) {
+    toggleViewButton.checked = mode === "creator";
+  }
 
   renderSections(mode);
 
@@ -249,7 +266,7 @@ async function loadSentForReview(mode) {
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
-            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
             <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
@@ -306,7 +323,7 @@ async function loadActive(mode) {
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
-            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
             <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
@@ -371,7 +388,7 @@ async function loadAwaitingYourReview(mode) {
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
-            <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
             <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
@@ -481,7 +498,7 @@ async function loadCreated(mode) {
           return `
             <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
               <div style="font-weight:600;">${displayPactTitle(p)}</div>
-              <div style="font-size:12px; opacity:0.8;">Other party: ${other}</div>
+              <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
               <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(
                 p
               )}</div>
@@ -515,7 +532,9 @@ async function loadMneeBalanceSafe() {
 
   try {
     const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const token = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
+    // Use current environment's MNEE address
+    const mneeAddress = getMNEEAddress();
+    const token = new ethers.Contract(mneeAddress, ERC20_ABI, provider);
 
     const [raw, decimals] = await Promise.all([
       token.balanceOf(address),
@@ -552,9 +571,28 @@ async function initContracts() {
   });
 }
 
+// Update MNEE label based on environment
+function updateMneeLabel() {
+  const env = getEnvironment();
+  const mneeLabel = document.getElementById("mneeLabel");
+  if (mneeLabel) {
+    mneeLabel.textContent = env === "testing" ? "mMNEE" : "MNEE";
+  }
+}
+
 // Init
 async function init() {
   try {
+    // Update MNEE label on page load
+    updateMneeLabel();
+    
+    // Listen for environment changes
+    window.addEventListener("storage", (e) => {
+      if (e.key === "pactory-environment") {
+        updateMneeLabel();
+      }
+    });
+    
     homeButton?.addEventListener("click", () => {
       window.location.href = "./index.html";
     });
@@ -592,6 +630,11 @@ async function init() {
 
     if (viewModalCancelBtn) {
       viewModalCancelBtn.onclick = () => {
+        // Revert toggle if user cancels
+        if (toggleViewButton) {
+          const currentMode = getViewMode();
+          toggleViewButton.checked = currentMode === "creator";
+        }
         hideViewSwitchModal();
       };
     }
@@ -599,6 +642,11 @@ async function init() {
     if (viewSwitchModal) {
       viewSwitchModal.onclick = (e) => {
         if (e.target === viewSwitchModal) {
+          // Revert toggle if user clicks outside modal to close
+          if (toggleViewButton) {
+            const currentMode = getViewMode();
+            toggleViewButton.checked = currentMode === "creator";
+          }
           hideViewSwitchModal();
         }
       };
@@ -613,11 +661,24 @@ async function init() {
       };
     }
 
-    toggleViewButton?.addEventListener("click", () => {
-      const cur = getViewMode();
-      const next = cur === "sponsor" ? "creator" : "sponsor";
-      showViewSwitchModal(cur, next);
-    });
+    // Handle toggle switch change event
+    if (toggleViewButton) {
+      toggleViewButton.onchange = () => {
+        const cur = getViewMode();
+        const next = toggleViewButton.checked ? "creator" : "sponsor";
+        
+        // If already in the target mode, revert the toggle
+        if (next === cur) {
+          toggleViewButton.checked = !toggleViewButton.checked;
+          return;
+        }
+        
+        showViewSwitchModal(cur, next);
+        
+        // If user cancels, revert the toggle
+        // This is handled in hideViewSwitchModal or we need to track cancellation
+      };
+    }
 
     if (!localStorage.getItem(viewModeKey(address))) {
       localStorage.setItem(viewModeKey(address), "sponsor");

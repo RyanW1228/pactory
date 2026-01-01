@@ -5,6 +5,11 @@ let overlay = null;
 let highlight = null;
 let tooltip = null;
 let isActive = false;
+let scrollHandler = null;
+let originalBodyOverflow = null;
+let resizeObserver = null;
+let currentStepElement = null;
+let currentStepData = null;
 
 // Define walkthrough steps for homepage - rewritten from scratch
 const homepageSteps = [
@@ -28,7 +33,7 @@ const homepageSteps = [
     title: 'Environment Settings',
     content: 'Switch between Testing and Production environments. In Testing mode, you can mint Mock MNEE tokens for testing.',
     element: '.environment-section',
-    position: 'bottom'
+    position: 'top'
   },
   {
     id: 'view-toggle',
@@ -150,6 +155,58 @@ const pactorySteps = [
   }
 ];
 
+// Define walkthrough steps for pact view page
+const pactViewSteps = [
+  {
+    id: 'pact-view-welcome',
+    title: 'Pact Details',
+    content: 'This page shows all the details of your pact. Let\'s explore the key information and actions available!',
+    element: '#title',
+    position: 'right',
+    showStartButton: true
+  },
+  {
+    id: 'pact-info',
+    title: 'Pact Information',
+    content: 'Here you can see the pact name, status, parties involved, duration, and payment structure. Review all details carefully.',
+    element: '#content',
+    position: 'right'
+  },
+  {
+    id: 'active-panel',
+    title: 'Active Pact Status',
+    content: 'If your pact is active, you\'ll see real-time stats here: video views, earned amounts, and time remaining. Click "Refresh Views" to update the latest numbers.',
+    element: '#activePanel',
+    position: 'right',
+    conditional: () => {
+      const panel = document.getElementById('activePanel');
+      return panel && panel.style.display !== 'none' && window.getComputedStyle(panel).display !== 'none';
+    }
+  },
+  {
+    id: 'video-link',
+    title: 'Video Link',
+    content: 'The creator can input the video link here once the pact is created. This link is used to track views and calculate earnings from TikTok, Instagram, or YouTube Shorts.',
+    element: '#content',
+    position: 'right'
+  },
+  {
+    id: 'actions',
+    title: 'Available Actions',
+    content: 'Depending on your role and the pact status, you may see different action buttons:\n\n• Input Video Link (Creator): Add the video URL\n• Approve and Fund (Sponsor): Lock funds to activate the pact\n• Negotiate: Propose changes to the pact\n• Accept/Reject: Review and respond to pact proposals\n• Refresh Views: Update view counts from the video platform\n• Claim: Withdraw unlocked earnings to your wallet',
+    element: '#content',
+    position: 'right'
+  },
+  {
+    id: 'pact-view-complete',
+    title: 'You\'re All Set!',
+    content: 'You now understand how to view and interact with pacts. Use the available actions based on your role and the pact status.',
+    element: '#content',
+    position: 'right',
+    showFinishButton: true
+  }
+];
+
 function getStepsForPage() {
   const path = window.location.pathname;
   const filename = window.location.pathname.split('/').pop() || '';
@@ -159,6 +216,8 @@ function getStepsForPage() {
     return dashboardSteps;
   } else if (path.includes('pactory') || filename === 'pactory.html') {
     return pactorySteps;
+  } else if (path.includes('pact-view') || filename === 'pact-view.html') {
+    return pactViewSteps;
   } else {
     // Default to homepage (index.html or root)
     return homepageSteps;
@@ -236,10 +295,14 @@ function positionHighlight(element) {
   highlight.style.height = `${pos.height + 8}px`;
   
   // Ensure the highlighted element is clickable by raising its z-index
+  // But don't interfere with hover states
   if (element) {
     const originalZIndex = element.style.zIndex || computedStyle.zIndex || 'auto';
-    element.style.zIndex = '10001';
-    element.setAttribute('data-original-z-index', originalZIndex);
+    // Only set z-index if it's not already high enough
+    if (parseInt(computedStyle.zIndex) < 10001) {
+      element.style.zIndex = '10001';
+      element.setAttribute('data-original-z-index', originalZIndex);
+    }
   }
 }
 
@@ -249,8 +312,14 @@ function positionTooltip(step, element) {
   const stepNum = currentStep + 1;
   const totalSteps = walkthroughSteps.length;
   
+  // Get content - use dynamic content if available, otherwise use static content
+  let content = step.content;
+  if (step.getContent && typeof step.getContent === 'function') {
+    content = step.getContent();
+  }
+  
   // Replace newlines with <br> tags for multi-line content
-  const formattedContent = step.content.replace(/\n/g, '<br>');
+  const formattedContent = content.replace(/\n/g, '<br>');
   
   let tooltipHTML = `
     <h3>
@@ -298,40 +367,47 @@ function positionTooltip(step, element) {
       return;
     }
     
-    const spacing = 20;
+    // Increased spacing to prevent arrow from overlapping highlight
+    const spacing = 28; // Increased from 20 to account for arrow size (12px) + padding
     let top, left, arrowClass;
     
     // Calculate initial position based on step.position
+    // Arrow class name indicates which direction the arrow points FROM the tooltip
     switch (step.position) {
       case 'top':
+        // Tooltip above element, arrow points DOWN
         top = rect.top - spacing;
         left = rect.left + rect.width / 2;
         tooltip.style.transform = 'translate(-50%, -100%)';
-        arrowClass = 'tooltip-bottom';
+        arrowClass = 'tooltip-bottom'; // Arrow at bottom of tooltip, points down
         break;
       case 'bottom':
+        // Tooltip below element, arrow points UP
         top = rect.bottom + spacing;
         left = rect.left + rect.width / 2;
         tooltip.style.transform = 'translate(-50%, 0)';
-        arrowClass = 'tooltip-top';
+        arrowClass = 'tooltip-top'; // Arrow at top of tooltip, points up
         break;
       case 'left':
+        // Tooltip to the left of element, arrow points RIGHT
         top = rect.top + rect.height / 2;
         left = rect.left - spacing;
         tooltip.style.transform = 'translate(-100%, -50%)';
-        arrowClass = 'tooltip-right';
+        arrowClass = 'tooltip-right'; // Arrow at right of tooltip, points right
         break;
       case 'right':
+        // Tooltip to the right of element, arrow points LEFT
         top = rect.top + rect.height / 2;
         left = rect.right + spacing;
         tooltip.style.transform = 'translate(0, -50%)';
-        arrowClass = 'tooltip-left';
+        arrowClass = 'tooltip-left'; // Arrow at left of tooltip, points left
         break;
       default:
+        // Default to bottom position
         top = rect.bottom + spacing;
         left = rect.left + rect.width / 2;
         tooltip.style.transform = 'translate(-50%, 0)';
-        arrowClass = 'tooltip-top';
+        arrowClass = 'tooltip-top'; // Arrow at top of tooltip, points up
     }
     
     // Set initial position (hidden) to measure tooltip
@@ -352,15 +428,55 @@ function positionTooltip(step, element) {
     }
     
     // Keep tooltip within viewport bounds
-    const padding = 20;
-    if (left < padding) left = padding;
-    if (left + tooltipRect.width > window.innerWidth - padding) {
-      left = window.innerWidth - tooltipRect.width - padding;
+    // Account for arrow size when calculating bounds
+    // Use larger padding when zoomed in to ensure visibility
+    const viewportPadding = Math.max(20, window.innerWidth * 0.05); // At least 5% of viewport
+    const arrowSize = 24; // Size of arrow (12px border * 2)
+    
+    // Store original positions for arrow hiding logic
+    const originalLeft = left;
+    const originalTop = top;
+    
+    // Ensure tooltip is fully visible, prioritizing keeping it near the element
+    if (left < viewportPadding) {
+      left = viewportPadding;
+      // If tooltip moved significantly, hide arrow to avoid confusion
+      if (step.position === 'left' || step.position === 'right') {
+        if (Math.abs(left - originalLeft) > 50) {
+          arrowClass = ''; // Remove arrow if tooltip was repositioned significantly
+        }
+      }
     }
-    if (top < padding) top = padding;
-    if (top + tooltipRect.height > window.innerHeight - padding) {
-      top = window.innerHeight - tooltipRect.height - padding;
+    if (left + tooltipRect.width > window.innerWidth - viewportPadding) {
+      left = window.innerWidth - tooltipRect.width - viewportPadding;
+      // If tooltip moved significantly, hide arrow to avoid confusion
+      if (step.position === 'left' || step.position === 'right') {
+        if (Math.abs(left - originalLeft) > 50) {
+          arrowClass = ''; // Remove arrow if tooltip was repositioned significantly
+        }
+      }
     }
+    if (top < viewportPadding) {
+      top = viewportPadding;
+      // If tooltip moved significantly, hide arrow to avoid confusion
+      if (step.position === 'top' || step.position === 'bottom') {
+        if (Math.abs(top - originalTop) > 50) {
+          arrowClass = ''; // Remove arrow if tooltip was repositioned significantly
+        }
+      }
+    }
+    if (top + tooltipRect.height > window.innerHeight - viewportPadding) {
+      top = window.innerHeight - tooltipRect.height - viewportPadding;
+      // If tooltip moved significantly, hide arrow to avoid confusion
+      if (step.position === 'top' || step.position === 'bottom') {
+        if (Math.abs(top - originalTop) > 50) {
+          arrowClass = ''; // Remove arrow if tooltip was repositioned significantly
+        }
+      }
+    }
+    
+    // Update arrow class if it was changed
+    tooltip.className = `walkthrough-tooltip ${arrowClass}`;
     
     // Apply final position and make visible
     tooltip.style.top = `${top}px`;
@@ -378,47 +494,315 @@ function showStep(stepIndex) {
   currentStep = stepIndex;
   const step = walkthroughSteps[stepIndex];
   
+  // Check conditional steps - skip if condition is false
+  if (step.conditional && typeof step.conditional === 'function') {
+    if (!step.conditional()) {
+      // Skip this step and move to next
+      if (stepIndex < walkthroughSteps.length - 1) {
+        showStep(stepIndex + 1);
+      } else {
+        finishWalkthrough();
+      }
+      return;
+    }
+  }
+  
   createOverlay();
   createHighlight();
   createTooltip();
   
   let element = null;
   if (step.element) {
-    element = document.querySelector(step.element);
-    if (element) {
-      // Check if element is visible
-      const rect = element.getBoundingClientRect();
-      const computedStyle = window.getComputedStyle(element);
-      const isVisible = rect.width > 0 && rect.height > 0 && 
-                       computedStyle.display !== 'none' &&
-                       computedStyle.visibility !== 'hidden';
+    // Handle button text matching (e.g., 'button[innerText*="Claim"]')
+    if (step.element.includes('innerText')) {
+      const match = step.element.match(/button\[innerText\*="([^"]+)"/);
+      if (match) {
+        const searchText = match[1];
+        const buttons = Array.from(document.querySelectorAll('button'));
+        element = buttons.find(btn => btn.innerText && btn.innerText.includes(searchText));
+      } else {
+        element = document.querySelector(step.element);
+      }
+    } else {
+      element = document.querySelector(step.element);
+    }
+    
+    // Special handling for connect button - check if wallet is already connected
+    if (step.element === '#connectButton') {
+      const connectBtn = document.getElementById('connectButton');
+      const logoutBtn = document.getElementById('logoutButton');
+      // If connect button doesn't exist, is hidden, OR logout button is visible, wallet is already connected
+      const isConnected = !connectBtn || 
+                         connectBtn.style.display === 'none' || 
+                         window.getComputedStyle(connectBtn).display === 'none' ||
+                         (logoutBtn && logoutBtn.style.display !== 'none' && window.getComputedStyle(logoutBtn).display !== 'none');
       
-      if (!isVisible || rect.top < -100 || rect.bottom > window.innerHeight + 100) {
-        // Element exists but not visible, scroll it into view
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Wait for scroll to complete (reduced from 400ms to 300ms)
-        setTimeout(() => {
-          if (isActive) { // Check if still active before positioning
+      if (isConnected) {
+        // Wallet is connected, show tooltip without highlighting button (no waiting/lag)
+        positionTooltip(step, null);
+        if (isActive) {
+          setupScrollPrevention(step, null);
+        }
+        if (highlight) highlight.style.display = 'none';
+        return; // Skip the rest of the element positioning to avoid lag
+      }
+    }
+    
+    if (element) {
+      // Always scroll element into center view, regardless of current visibility
+      // This ensures elements are visible even when zoomed in
+      element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      
+      // Wait for scroll to complete, then check if we need additional adjustment
+      setTimeout(() => {
+        if (!isActive) return; // Check if still active
+        
+        const rect = element.getBoundingClientRect();
+        const computedStyle = window.getComputedStyle(element);
+        const isVisible = rect.width > 0 && rect.height > 0 && 
+                         computedStyle.display !== 'none' &&
+                         computedStyle.visibility !== 'hidden';
+        
+        if (isVisible) {
+          // Calculate if element is truly centered
+          const viewportCenterY = window.innerHeight / 2;
+          const viewportCenterX = window.innerWidth / 2;
+          const elementCenterY = rect.top + rect.height / 2;
+          const elementCenterX = rect.left + rect.width / 2;
+          
+          // Calculate scroll adjustments needed to center
+          const scrollY = elementCenterY - viewportCenterY;
+          const scrollX = elementCenterX - viewportCenterX;
+          
+          // If element is not well-centered, make a small adjustment
+          // We do this before disabling scroll, so it's allowed
+          if (Math.abs(scrollY) > 50 || Math.abs(scrollX) > 50) {
+            window.scrollBy({
+              top: scrollY,
+              left: scrollX,
+              behavior: 'smooth'
+            });
+            
+            // Wait a bit more for this adjustment
+            setTimeout(() => {
+              if (isActive) {
+                positionHighlight(element);
+                positionTooltip(step, element);
+                // Now disable scrolling after positioning
+                setupScrollPrevention(step, element);
+              }
+            }, 300);
+          } else {
+            // Element is well-centered, position immediately
             positionHighlight(element);
             positionTooltip(step, element);
+            // Now disable scrolling after positioning
+            setupScrollPrevention(step, element);
           }
-        }, 300);
-      } else {
-        // Element is already visible, position immediately
-        positionHighlight(element);
-        positionTooltip(step, element);
-      }
+        } else {
+          // Element not visible, try positioning anyway
+          positionHighlight(element);
+          positionTooltip(step, element);
+          setupScrollPrevention(step, element);
+        }
+      }, 400); // Increased timeout to allow scroll to complete
     } else {
       // Element not found, show tooltip without highlight
       positionTooltip(step, null);
+      if (isActive) {
+        setupScrollPrevention(step, null);
+      }
     }
   } else {
+    // No element (center tooltip)
     positionTooltip(step, null);
+    if (isActive) {
+      setupScrollPrevention(step, null);
+    }
   }
   
   if (!element) {
     if (highlight) highlight.style.display = 'none';
   }
+}
+
+function setupScrollPrevention(step, element) {
+  // Store current step data for repositioning
+  currentStepElement = element;
+  currentStepData = step;
+  
+  // Prevent body scrolling
+  if (!originalBodyOverflow) {
+    originalBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    // Also prevent scrolling on html element
+    document.documentElement.style.overflow = 'hidden';
+  }
+  
+  // Remove existing scroll handler if any
+  if (scrollHandler) {
+    window.removeEventListener('scroll', scrollHandler, true);
+    window.removeEventListener('wheel', scrollHandler, true);
+    window.removeEventListener('touchmove', scrollHandler, true);
+  }
+  
+  // Create reposition function
+  const repositionElements = () => {
+    if (!isActive || !currentStepElement) return;
+    positionHighlight(currentStepElement);
+    positionTooltip(currentStepData, currentStepElement);
+  };
+  
+  // Create new scroll handler that repositions elements
+  scrollHandler = (e) => {
+    if (!isActive) return;
+    
+    // Don't prevent events on tooltip or its children (allow button interactions)
+    const target = e.target;
+    if (tooltip && (tooltip.contains(target) || target === tooltip || target.closest('.walkthrough-tooltip'))) {
+      return; // Allow interactions with tooltip
+    }
+    
+    // Don't prevent events on buttons or interactive elements
+    if (target.tagName === 'BUTTON' || target.closest('button') || 
+        target.tagName === 'A' || target.closest('a') ||
+        target.tagName === 'INPUT' || target.closest('input')) {
+      return; // Allow button clicks and form interactions
+    }
+    
+    // Prevent default scroll behavior
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Reposition highlight and tooltip to follow element
+    repositionElements();
+    
+    return false;
+  };
+  
+  // Add scroll prevention listeners
+  window.addEventListener('scroll', scrollHandler, true);
+  window.addEventListener('wheel', scrollHandler, { passive: false, capture: true });
+  window.addEventListener('touchmove', scrollHandler, { passive: false, capture: true });
+  
+  // Also prevent keyboard scrolling
+  const keyHandler = (e) => {
+    if (!isActive) return;
+    
+    // Don't prevent events on tooltip or input elements (allow typing/interactions)
+    const target = e.target;
+    if (tooltip && (tooltip.contains(target) || target === tooltip || target.closest('.walkthrough-tooltip'))) {
+      return; // Allow interactions with tooltip
+    }
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return; // Allow typing in inputs
+    }
+    // Allow button interactions
+    if (target.tagName === 'BUTTON' || target.closest('button')) {
+      return; // Allow button clicks
+    }
+    
+    // Prevent arrow keys, page up/down, home/end from scrolling
+    if ([37, 38, 39, 40, 33, 34, 35, 36].includes(e.keyCode)) {
+      e.preventDefault();
+      e.stopPropagation();
+      // Reposition elements if they try to scroll
+      repositionElements();
+      return false;
+    }
+  };
+  
+  window.addEventListener('keydown', keyHandler, true);
+  
+  // Store key handler for cleanup
+  scrollHandler._keyHandler = keyHandler;
+  scrollHandler._reposition = repositionElements;
+  
+  // Set up ResizeObserver to reposition elements if layout changes
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+  }
+  
+  resizeObserver = new ResizeObserver(() => {
+    if (isActive && currentStepElement) {
+      repositionElements();
+    }
+  });
+  
+  // Observe the element and document body for layout changes
+  if (element) {
+    resizeObserver.observe(element);
+  }
+  resizeObserver.observe(document.body);
+  
+  // Also observe window resize
+  const resizeHandler = () => {
+    if (isActive && currentStepElement) {
+      repositionElements();
+    }
+  };
+  
+  window.addEventListener('resize', resizeHandler);
+  scrollHandler._resizeHandler = resizeHandler;
+}
+
+function removeScrollPrevention() {
+  // Always restore body overflow, regardless of originalBodyOverflow state
+  // This ensures scrolling is restored even if something went wrong
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
+  originalBodyOverflow = null;
+  
+  // Disconnect resize observer
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+  
+  // Remove scroll handlers - try to remove even if scrollHandler is null
+  // This handles edge cases where handlers might still be attached
+  const handlersToRemove = [
+    { event: 'scroll', handler: scrollHandler, capture: true },
+    { event: 'wheel', handler: scrollHandler, capture: true },
+    { event: 'touchmove', handler: scrollHandler, capture: true },
+  ];
+  
+  handlersToRemove.forEach(({ event, handler, capture }) => {
+    if (handler) {
+      try {
+        window.removeEventListener(event, handler, capture);
+      } catch (e) {
+        console.warn(`Error removing ${event} listener:`, e);
+      }
+    }
+  });
+  
+  // Remove key handler if it exists
+  if (scrollHandler && scrollHandler._keyHandler) {
+    try {
+      window.removeEventListener('keydown', scrollHandler._keyHandler, true);
+    } catch (e) {
+      console.warn('Error removing keydown listener:', e);
+    }
+  }
+  
+  // Remove resize handler if it exists
+  if (scrollHandler && scrollHandler._resizeHandler) {
+    try {
+      window.removeEventListener('resize', scrollHandler._resizeHandler);
+    } catch (e) {
+      console.warn('Error removing resize listener:', e);
+    }
+  }
+  
+  scrollHandler = null;
+  
+  // Clear current step references
+  currentStepElement = null;
+  currentStepData = null;
+  
+  // Force a reflow to ensure styles are applied
+  void document.body.offsetHeight;
 }
 
 export function startWalkthrough() {
@@ -467,12 +851,19 @@ export function walkthroughPrev() {
 }
 
 export function finishWalkthrough() {
+  // Set inactive first to prevent any new scroll prevention
+  isActive = false;
+  
+  // Always remove scroll prevention, even if already inactive
+  // This ensures scrolling is restored even if something went wrong
+  removeScrollPrevention();
+  
   if (!isActive && overlay === null && highlight === null && tooltip === null) {
-    // Already cleaned up, nothing to do
+    // Already cleaned up, but ensure scrolling is restored
+    removeScrollPrevention(); // Call again to be absolutely sure
     return;
   }
   
-  isActive = false;
   currentStep = 0;
   
   // Reset any z-index changes on elements

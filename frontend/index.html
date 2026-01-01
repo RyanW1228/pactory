@@ -402,6 +402,55 @@
         opacity: 0.5;
         cursor: not-allowed;
       }
+
+      /* Address Names Section */
+      .address-names-section[open] .dropdown-arrow {
+        transform: rotate(180deg);
+      }
+
+      .address-name-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        background: #F5F9FF;
+        border-radius: 6px;
+        border: 1px solid rgba(33, 150, 243, 0.1);
+      }
+
+      .address-name-item-address {
+        font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+        font-size: 0.8125rem;
+        color: #546E7A;
+        flex: 1;
+        margin-right: 12px;
+        word-break: break-all;
+      }
+
+      .address-name-item-label {
+        font-weight: 600;
+        color: #1E3A5F;
+        flex: 1;
+        margin-right: 12px;
+      }
+
+      .address-name-item-delete {
+        background: #EF5350;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .address-name-item-delete:hover {
+        background: #E53935;
+        transform: translateY(-1px);
+      }
     </style>
   </head>
   <body>
@@ -415,7 +464,7 @@
           <span class="info-value" id="account">Not connected</span>
         </div>
         <div class="info-row">
-          <span class="info-label">MNEE Balance</span>
+          <span class="info-label" id="mneeLabel">MNEE Balance</span>
           <span class="info-value" id="mneeBalance">-</span>
         </div>
         <div class="info-row">
@@ -445,6 +494,28 @@
         </div>
         <button id="mintMockMNEEButton" class="mint-btn" style="display: none;">Mint Mock MNEE</button>
       </div>
+
+      <details class="address-names-section" style="margin-top: 16px; margin-bottom: 24px;">
+        <summary style="cursor: pointer; font-weight: 600; font-size: 1rem; color: #1E3A5F; padding: 12px; background: #F5F9FF; border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.12); list-style: none; display: flex; align-items: center; justify-content: space-between;">
+          <span>Manage Address Names</span>
+          <span class="dropdown-arrow" style="transition: transform 0.2s; display: inline-block; font-size: 0.875rem; color: #1976D2;">▼</span>
+        </summary>
+        <div style="margin-top: 16px; padding: 16px; background: #FFFFFF; border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.12);">
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; font-weight: 600; color: #37474F; margin-bottom: 8px; font-size: 0.875rem;">Add or Edit Address Name</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <input type="text" id="addressNameInput" placeholder="0x..." style="flex: 1; padding: 10px 14px; border: 1px solid rgba(33, 150, 243, 0.2); border-radius: 6px; font-size: 0.875rem; font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;" />
+              <input type="text" id="addressNameLabelInput" placeholder="Name (e.g., John Doe)" style="flex: 1; padding: 10px 14px; border: 1px solid rgba(33, 150, 243, 0.2); border-radius: 6px; font-size: 0.875rem;" />
+              <button id="saveAddressNameButton" style="padding: 10px 20px; background: #1976D2; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.875rem; white-space: nowrap;">Save</button>
+            </div>
+            <small id="addressNameStatus" style="display: block; margin-top: 8px; font-size: 0.8125rem; color: #546E7A;"></small>
+          </div>
+          <div id="addressNamesList" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(33, 150, 243, 0.1);">
+            <div style="font-weight: 600; color: #37474F; margin-bottom: 12px; font-size: 0.875rem;">Saved Address Names:</div>
+            <div id="addressNamesListContent" style="font-size: 0.875rem;"></div>
+          </div>
+        </div>
+      </details>
 
       <button id="connectButton" class="primary-btn">Connect Wallet</button>
       <button id="viewPactsButton" class="primary-btn">View Pacts</button>

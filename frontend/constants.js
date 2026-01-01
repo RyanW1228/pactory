@@ -1,7 +1,8 @@
 // Environment configuration
-const REAL_MNEE_ADDRESS = "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"; // Real MNEE on mainnet
-const MOCK_MNEE_ADDRESS = "0x249E2dCF1C601B3fE319A2E7A5465A41c03C3eaF"; // MockMNEE contract address
-const TESTNET_MNEE_ADDRESS = "0x5D74F51bD1b03E8F7742538647cf7ce369c91582"; // testnet MNEE address
+// Real MNEE contract address (for production environment on Sepolia)
+const REAL_MNEE_ADDRESS = "0x5D74F51bD1b03E8F7742538647cf7ce369c91582"; // MNEE contract address on Sepolia
+// Mock MNEE contract address (for testing environment)
+const MOCK_MNEE_ADDRESS = "0x249E2dCF1C601B3fE319A2E7A5465A41c03C3eaF"; // Deployed MockMNEE contract address
 
 export const PACT_ESCROW_ADDRESS = "0x243B3Bc9f26b7667C33Ba4E68Ade010B91CEC2bc";
 
@@ -15,13 +16,15 @@ export function getEnvironment() {
 }
 
 // Get MNEE address based on environment
+// Production: Uses the real MNEE contract address
+// Testing: Uses the Mock MNEE contract address
 export function getMNEEAddress() {
   const env = getEnvironment();
   if (env === "production") {
-    return REAL_MNEE_ADDRESS;
+    return REAL_MNEE_ADDRESS; // Real MNEE contract address
   } else {
     // Testing environment - use MockMNEE
-    return MOCK_MNEE_ADDRESS;
+    return MOCK_MNEE_ADDRESS; // Mock MNEE contract address
   }
 }
 
