@@ -86,6 +86,36 @@ function isExpired(p) {
   return endMs != null && Date.now() > endMs;
 }
 
+// Check if pact is completed (expired + all MNEE claimed/refunded)
+async function isPactCompleted(p) {
+  if (!isExpired(p)) return false;
+  
+  try {
+    const onchain = await readOnchainPaidOut(pactId);
+    const status = Number(onchain.status);
+    const refunded = Boolean(onchain.refunded);
+    
+    // Status enum: 0 = Created, 1 = Funded, 2 = Closed
+    // Pact is completed if:
+    // 1. Status is Closed (refund happened), OR
+    // 2. All MNEE has been paid out (paidOut == maxPayout)
+    if (status === 2 || refunded) {
+      return true;
+    }
+    
+    // Check if all MNEE has been claimed
+    const decimals = await getTokenDecimals();
+    const paidOut = Number(ethers.formatUnits(onchain.paidOutRaw, decimals));
+    const maxPayout = Number(ethers.formatUnits(onchain.maxPayoutRaw, decimals));
+    
+    // Consider completed if paidOut is very close to maxPayout (within 0.01)
+    return Math.abs(paidOut - maxPayout) < 0.01;
+  } catch (e) {
+    console.warn("[isPactCompleted] Failed to check on-chain status:", e);
+    return false;
+  }
+}
+
 function disableEarningsActions({ refreshBtn, claimBtn, errEl, reason }) {
   if (refreshBtn) {
     refreshBtn.disabled = true;
@@ -848,6 +878,8 @@ async function readOnchainPaidOut(pactId) {
     maxPayoutRaw: pact.maxPayout, // BigInt-like
     sponsor: pact.sponsor,
     creator: pact.creator,
+    status: pact.status, // 0 = Created, 1 = Funded, 2 = Closed
+    refunded: pact.refunded, // boolean
   };
 }
 
@@ -1517,6 +1549,86 @@ if (isActivePact(p)) {
       rb.style.cursor = ok ? "pointer" : "not-allowed";
     }
   }, 1000);
+  
+  // --- Archive Button (ONLY when pact is completed) ---
+  // Check if pact is completed and show Archive button
+  async function checkAndShowArchiveButton() {
+    const completed = await isPactCompleted(p);
+    if (!completed) return;
+    
+    // Check if archive button already exists
+    if (document.getElementById("ap-archive")) return;
+    
+    const archiveBtn = document.createElement("button");
+    archiveBtn.id = "ap-archive";
+    archiveBtn.type = "button";
+    archiveBtn.innerText = "Archive";
+    archiveBtn.style.display = "block";
+    archiveBtn.style.marginTop = "12px";
+    archiveBtn.style.background = "#546E7A";
+    archiveBtn.style.color = "white";
+    archiveBtn.style.padding = "8px 14px";
+    archiveBtn.style.borderRadius = "8px";
+    archiveBtn.style.border = "none";
+    archiveBtn.style.cursor = "pointer";
+    
+    archiveBtn.onclick = async () => {
+      const ok = confirm("Archive this completed pact?\n\nThis will move it to the Archive section.");
+      if (!ok) return;
+      
+      // Signature verification
+      const sigResult = await verifySignatureForAction("archive", id);
+      if (!sigResult) {
+        return; // User cancelled or verification failed
+      }
+      
+      archiveBtn.disabled = true;
+      archiveBtn.style.opacity = "0.7";
+      archiveBtn.style.cursor = "not-allowed";
+      
+      try {
+        const resp = await fetch(
+          `${API_BASE}/api/pacts/${encodeURIComponent(
+            id
+          )}/archive?address=${encodeURIComponent(address)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              signature: sigResult.signature,
+              message: sigResult.message,
+            }),
+          }
+        );
+        
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          alert(data?.error || "Failed to archive pact");
+          archiveBtn.disabled = false;
+          archiveBtn.style.opacity = "1";
+          archiveBtn.style.cursor = "pointer";
+          return;
+        }
+        
+        alert("✅ Pact archived successfully!");
+        localStorage.setItem("pactsNeedsRefresh", "1");
+        window.location.assign("./pacts-dashboard.html");
+      } catch (err) {
+        alert("Archive failed (backend not reachable).");
+        archiveBtn.disabled = false;
+        archiveBtn.style.opacity = "1";
+        archiveBtn.style.cursor = "pointer";
+      }
+    };
+    
+    // Add archive button to controls container
+    controls.appendChild(archiveBtn);
+  }
+  
+  // Check and show archive button after a short delay to ensure page is loaded
+  setTimeout(checkAndShowArchiveButton, 1000);
 }
 
 // --- Input Video Link button (ONLY creator, ONLY created view) ---

@@ -1249,6 +1249,15 @@ function validateCounterparty() {
     return false;
   }
 
+  // Check allowlist (if function is available from index.js)
+  const isAllowed = window.isAddressAllowed ? window.isAddressAllowed(value) : true;
+  if (!isAllowed) {
+    counterpartyStatus.innerText = `Address is not on your allowlist. Add it on the homepage.`;
+    counterpartyStatus.className = "status-text status-error";
+    if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
+    return false;
+  }
+
   // Check if address has a saved name
   const name = localStorage.getItem(`addressName:${value.toLowerCase()}`);
   if (name) {

@@ -1066,6 +1066,89 @@ app.delete("/api/pacts/:id", (req, res) => {
   }
 });
 
+// Delete Archive pact (replaced or other archived statuses)
+app.delete("/api/pacts/:id/archive", (req, res) => {
+  try {
+    const id = requirePactIdString(req.params.id);
+
+    const { address } = req.query;
+    if (!address || !ethers.isAddress(address))
+      throw new Error("Invalid address");
+
+    const addr = normAddr(address);
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    // Only proposer OR counterparty can delete
+    const isProposer = normAddr(pact.proposer_address) === addr;
+    const isCounterparty = normAddr(pact.counterparty_address) === addr;
+
+    if (!isProposer && !isCounterparty) {
+      throw new Error("Not authorized to delete this pact");
+    }
+
+    // Only allowed for replaced or other archived statuses
+    const archivedStatuses = ["replaced"];
+    if (!archivedStatuses.includes(pact.status)) {
+      throw new Error("Only archived pacts can be deleted from Archive");
+    }
+
+    db.prepare(`DELETE FROM pacts WHERE id=?`).run(id);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+// Archive completed pact (after duration ends and MNEE is claimed)
+app.post("/api/pacts/:id/archive", (req, res) => {
+  try {
+    const id = requirePactIdString(req.params.id);
+
+    const { address } = req.query || {};
+    const { signature, message } = req.body || {};
+    
+    if (!address || !ethers.isAddress(address))
+      throw new Error("Invalid address");
+
+    const addr = normAddr(address);
+
+    // Verify signature
+    if (signature && message) {
+      verifySignatureOrThrow({ message, signature, expectedAddress: addr });
+    }
+
+    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    if (!pact) throw new Error("Pact not found");
+
+    // Only proposer OR counterparty can archive
+    const isProposer = normAddr(pact.proposer_address) === addr;
+    const isCounterparty = normAddr(pact.counterparty_address) === addr;
+
+    if (!isProposer && !isCounterparty) {
+      throw new Error("Not authorized to archive this pact");
+    }
+
+    // Only allow archiving active pacts (that are completed)
+    if (String(pact.status) !== "active") {
+      throw new Error("Only active pacts can be archived");
+    }
+
+    const t = nowIso();
+    
+    // Change status to "replaced" (which is what Archive section shows)
+    db.prepare(
+      `UPDATE pacts SET status='replaced', updated_at=? WHERE id=?`
+    ).run(t, id);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
 app.post("/api/pacts/:id/mark-active", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);

@@ -143,6 +143,7 @@ async function refreshDashboard() {
     loadSentForReview(mode),
     loadAwaitingYourReview(mode),
     loadCreated(mode),
+    loadArchive(mode),
   ]);
 }
 
@@ -195,6 +196,48 @@ function attachManageHandler(listEl) {
         delBtn.disabled = false;
         delBtn.style.opacity = "1";
         delBtn.style.cursor = "pointer";
+      }
+      return;
+    }
+
+    // 1b) Delete (archive)
+    const delArchiveBtn = e.target.closest("[data-delete-archive]");
+    if (delArchiveBtn) {
+      const pactId = delArchiveBtn.getAttribute("data-delete-archive");
+      if (!pactId) return;
+
+      const ok = confirm("Delete this archived pact?\n\nThis cannot be undone.");
+      if (!ok) return;
+
+      delArchiveBtn.disabled = true;
+      delArchiveBtn.style.opacity = "0.7";
+      delArchiveBtn.style.cursor = "not-allowed";
+
+      try {
+        const resp = await fetch(
+          `${API_BASE}/api/pacts/${encodeURIComponent(
+            pactId
+          )}/archive?address=${encodeURIComponent(address)}`,
+          { method: "DELETE" }
+        );
+
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          alert(data?.error || "Failed to delete pact");
+          delArchiveBtn.disabled = false;
+          delArchiveBtn.style.opacity = "1";
+          delArchiveBtn.style.cursor = "pointer";
+          return;
+        }
+
+        // refresh dashboard
+        localStorage.setItem("pactsNeedsRefresh", "1");
+        await refreshDashboard();
+      } catch (err) {
+        alert("Delete failed (backend not reachable).");
+        delArchiveBtn.disabled = false;
+        delArchiveBtn.style.opacity = "1";
+        delArchiveBtn.style.cursor = "pointer";
       }
       return;
     }
@@ -523,6 +566,71 @@ async function loadCreated(mode) {
       countEl.innerText = "(0)";
       listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
     }
+  }
+}
+
+// Archive
+async function loadArchive(mode) {
+  const sectionId = "archive";
+  const listEl = document.getElementById(`list-${sectionId}`);
+  const countEl = document.getElementById(`count-${sectionId}`);
+  if (!listEl || !countEl) return;
+
+  attachManageHandler(listEl);
+
+  try {
+    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
+      address
+    )}&role=${encodeURIComponent(mode)}&status=replaced`;
+
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+
+    countEl.innerText = `(${data?.rows?.length || 0})`;
+
+    if (
+      !res.ok ||
+      !data.ok ||
+      !Array.isArray(data.rows) ||
+      data.rows.length === 0
+    ) {
+      listEl.innerHTML = `<p class="empty">No archived pacts yet.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = data.rows
+      .map((p) => {
+        const other =
+          mode === "sponsor" ? p.creator_address : p.sponsor_address;
+
+        return `
+          <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
+            <div style="font-weight:600;">${displayPactTitle(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
+            <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
+            <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
+              p.created_at
+            )}</div>
+            <div style="margin-top:8px; display:flex; gap:8px;">
+              <button type="button" data-open-pact="${
+                p.id
+              }" data-open-mode="archive" style="margin-top:0;">
+                View
+              </button>
+              <button type="button" data-delete-archive="${
+                p.id
+              }" style="margin-top:0; background:#D32F2F;">
+                Delete
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  } catch (e) {
+    console.log("Archive load failed:", e);
+    countEl.innerText = "(0)";
+    listEl.innerHTML = `<p class="empty">Failed to load.</p>`;
   }
 }
 

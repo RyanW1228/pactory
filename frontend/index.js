@@ -103,6 +103,12 @@ async function connect() {
   // Read balances via RPC (as before)
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   await showBalances(provider, address);
+  
+  // Update allowlist UI after connecting
+  updateAllowlistUI();
+  if (isAllowlistEnabled()) {
+    renderAllowlist();
+  }
 }
 
 async function setupContracts(params) {
@@ -567,6 +573,211 @@ if (saveAddressNameButton) {
 window.getAddressName = getAddressName;
 window.formatAddressWithName = formatAddressWithName;
 
+// Allowlist management
+const allowlistInput = document.getElementById("allowlistInput");
+const addAllowlistButton = document.getElementById("addAllowlistButton");
+const allowlistStatus = document.getElementById("allowlistStatus");
+const allowlistListContent = document.getElementById("allowlistListContent");
+const allowlistToggle = document.getElementById("allowlistToggle");
+const allowlistContent = document.getElementById("allowlistContent");
+
+function isAllowlistEnabled() {
+  if (!address) return false;
+  const key = `allowlistEnabled:${address.toLowerCase()}`;
+  const stored = localStorage.getItem(key);
+  return stored === "true";
+}
+
+function setAllowlistEnabled(enabled) {
+  if (!address) return;
+  const key = `allowlistEnabled:${address.toLowerCase()}`;
+  localStorage.setItem(key, enabled ? "true" : "false");
+}
+
+function getAllowedAddresses() {
+  if (!address) return [];
+  const key = `allowlist:${address.toLowerCase()}`;
+  const stored = localStorage.getItem(key);
+  if (!stored) return [];
+  try {
+    return JSON.parse(stored);
+  } catch (e) {
+    return [];
+  }
+}
+
+function setAllowedAddresses(addresses) {
+  if (!address) return;
+  const key = `allowlist:${address.toLowerCase()}`;
+  localStorage.setItem(key, JSON.stringify(addresses));
+}
+
+function addToAllowlist(addressToAdd) {
+  if (!address) return;
+  const addresses = getAllowedAddresses();
+  const normalized = addressToAdd.toLowerCase();
+  if (!addresses.includes(normalized)) {
+    addresses.push(normalized);
+    setAllowedAddresses(addresses);
+  }
+}
+
+function removeFromAllowlist(addressToRemove) {
+  if (!address) return;
+  const addresses = getAllowedAddresses();
+  const normalized = addressToRemove.toLowerCase();
+  const filtered = addresses.filter(addr => addr !== normalized);
+  setAllowedAddresses(filtered);
+}
+
+function isAddressAllowed(addressToCheck) {
+  if (!address) return true; // If not logged in, allow all (shouldn't happen)
+  
+  // If allowlist is not enabled, allow all addresses
+  if (!isAllowlistEnabled()) return true;
+  
+  const addresses = getAllowedAddresses();
+  // If allowlist is enabled but empty, block all addresses
+  if (addresses.length === 0) return false;
+  
+  return addresses.includes(addressToCheck.toLowerCase());
+}
+
+function updateAllowlistUI() {
+  if (!address) return;
+  
+  const enabled = isAllowlistEnabled();
+  if (allowlistToggle) {
+    allowlistToggle.checked = enabled;
+  }
+  if (allowlistContent) {
+    allowlistContent.style.display = enabled ? "block" : "none";
+  }
+}
+
+function renderAllowlist() {
+  if (!allowlistListContent || !address) return;
+  
+  const addresses = getAllowedAddresses();
+  
+  if (addresses.length === 0) {
+    allowlistListContent.innerHTML = '<div style="color: #999; font-style: italic; padding: 12px;">No addresses in allowlist yet. Add addresses to restrict pact creation.</div>';
+    return;
+  }
+  
+  allowlistListContent.innerHTML = addresses.map(addr => {
+    const name = getAddressName(addr);
+    const displayName = name ? `${name} (${addr})` : addr;
+    return `
+      <div class="address-name-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; margin-bottom: 8px; background: #FAFBFF; border-radius: 6px; border: 1px solid rgba(33, 150, 243, 0.1);">
+        <div class="address-name-item-address" style="font-family: \'SF Mono\', \'Monaco\', \'Menlo\', monospace; font-size: 0.8125rem; color: #1E3A5F; word-break: break-all; flex: 1;">${displayName}</div>
+        <button class="address-name-item-delete" data-address="${addr}" style="padding: 6px 12px; background: #D32F2F; color: white; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-left: 12px; white-space: nowrap;">Remove</button>
+      </div>
+    `;
+  }).join("");
+  
+  // Attach delete handlers
+  allowlistListContent.querySelectorAll(".address-name-item-delete").forEach(btn => {
+    btn.onclick = () => {
+      const addr = btn.getAttribute("data-address");
+      if (confirm(`Remove ${addr} from allowlist?`)) {
+        removeFromAllowlist(addr);
+        renderAllowlist();
+        if (allowlistStatus) {
+          allowlistStatus.textContent = "Address removed from allowlist.";
+          allowlistStatus.style.color = "#1976D2";
+          setTimeout(() => {
+            allowlistStatus.textContent = "";
+          }, 3000);
+        }
+      }
+    };
+  });
+}
+
+if (addAllowlistButton) {
+  addAllowlistButton.onclick = () => {
+    if (!address) {
+      if (allowlistStatus) {
+        allowlistStatus.textContent = "Please connect your wallet first.";
+        allowlistStatus.style.color = "#C62828";
+      }
+      return;
+    }
+    
+    const addressToAdd = allowlistInput?.value.trim();
+    
+    if (!addressToAdd) {
+      if (allowlistStatus) {
+        allowlistStatus.textContent = "Please enter an address.";
+        allowlistStatus.style.color = "#C62828";
+      }
+      return;
+    }
+    
+    if (!ethers.isAddress(addressToAdd)) {
+      if (allowlistStatus) {
+        allowlistStatus.textContent = "Invalid Ethereum address.";
+        allowlistStatus.style.color = "#C62828";
+      }
+      return;
+    }
+    
+    if (isAddressAllowed(addressToAdd)) {
+      if (allowlistStatus) {
+        allowlistStatus.textContent = "Address is already in allowlist.";
+        allowlistStatus.style.color = "#F57C00";
+      }
+      return;
+    }
+    
+    addToAllowlist(addressToAdd);
+    renderAllowlist();
+    if (allowlistStatus) {
+      allowlistStatus.textContent = "Address added to allowlist!";
+      allowlistStatus.style.color = "#1B5E20";
+    }
+    
+    // Clear input
+    if (allowlistInput) allowlistInput.value = "";
+    
+    if (allowlistStatus) {
+      setTimeout(() => {
+        allowlistStatus.textContent = "";
+      }, 3000);
+    }
+  };
+}
+
+// Toggle allowlist on/off
+if (allowlistToggle) {
+  allowlistToggle.onchange = () => {
+    if (!address) {
+      if (allowlistStatus) {
+        allowlistStatus.textContent = "Please connect your wallet first.";
+        allowlistStatus.style.color = "#C62828";
+      }
+      allowlistToggle.checked = false;
+      return;
+    }
+    
+    const enabled = allowlistToggle.checked;
+    setAllowlistEnabled(enabled);
+    updateAllowlistUI();
+    
+    if (enabled) {
+      renderAllowlist();
+    }
+  };
+}
+
+// Export functions for use in other files
+window.getAllowedAddresses = getAllowedAddresses;
+window.isAddressAllowed = isAddressAllowed;
+window.addToAllowlist = addToAllowlist;
+window.removeFromAllowlist = removeFromAllowlist;
+window.isAllowlistEnabled = isAllowlistEnabled;
+
 // Init
 loadFromLocalStorage().catch(() => {});
 updateEnvironmentUI().catch(() => {});
@@ -578,5 +789,22 @@ window.addEventListener('storage', async (event) => {
     await updateEnvironmentUI();
   } else if (event.key && event.key.startsWith('addressName:')) {
     renderAddressNamesList();
+  } else if (event.key && event.key.startsWith('allowlist:')) {
+    if (isAllowlistEnabled()) {
+      renderAllowlist();
+    }
+  } else if (event.key && event.key.startsWith('allowlistEnabled:')) {
+    updateAllowlistUI();
+    if (isAllowlistEnabled()) {
+      renderAllowlist();
+    }
   }
 });
+
+// Render allowlist on page load if address is available
+if (address) {
+  updateAllowlistUI();
+  if (isAllowlistEnabled()) {
+    renderAllowlist();
+  }
+}
