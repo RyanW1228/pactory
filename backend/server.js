@@ -9,8 +9,9 @@ import db from "./db.js";
 const app = express();
 app.set("trust proxy", 1);
 
-//shivers
-// Check for VERIFIER_PRIVATE_KEY
+// --------------------
+// ✅ Verifier wallet
+// --------------------
 const privateKey = process.env.VERIFIER_PRIVATE_KEY;
 if (!privateKey || privateKey === "[ REDACTED ]" || privateKey.trim() === "") {
   console.error("❌ ERROR: VERIFIER_PRIVATE_KEY is not set or is invalid!");
@@ -23,7 +24,7 @@ const verifierWallet = new ethers.Wallet(privateKey);
 console.log("✅ Verifier address:", verifierWallet.address);
 
 // --------------------
-// ✅ CORS + Preflight (put BEFORE limiter + routes)
+// ✅ CORS + JSON
 // --------------------
 const corsOptions = {
   origin: "*",
@@ -35,7 +36,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
 
 // --------------------
-// ✅ Rate limit (skip OPTIONS so preflight never hangs)
+// ✅ Rate limit (skip OPTIONS)
 // --------------------
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -51,15 +52,42 @@ app.use((req, res, next) => {
 });
 
 // --------------------
-// DB (single source of truth)
+// DB migration helpers
 // --------------------
-
-// --- migration helpers ---
 function hasColumn(table, col) {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all();
   return rows.some((r) => String(r.name).toLowerCase() === col.toLowerCase());
 }
 
+function requireEnvironment(env) {
+  const e = String(env || "")
+    .trim()
+    .toLowerCase();
+  if (e !== "testing" && e !== "production") {
+    throw new Error("Invalid environment (must be 'testing' or 'production')");
+  }
+  return e;
+}
+
+function defaultEnvironment() {
+  return requireEnvironment(process.env.PACTORY_ENV || "testing");
+}
+
+// ✅ single helper to read env on ALL routes
+function getEnvFromReq(req) {
+  const raw =
+    // query
+    (req.query && (req.query.env || req.query.environment)) ||
+    // body
+    (req.body && (req.body.env || req.body.environment)) ||
+    defaultEnvironment();
+
+  return requireEnvironment(raw);
+}
+
+// --------------------
+// ✅ Ensure columns exist (for older DBs)
+// --------------------
 if (!hasColumn("pacts", "name")) {
   db.exec(`ALTER TABLE pacts ADD COLUMN name TEXT`);
   db.exec(
@@ -82,6 +110,17 @@ if (!hasColumn("pacts", "active_started_at")) {
 if (!hasColumn("pacts", "active_ends_at")) {
   db.exec(`ALTER TABLE pacts ADD COLUMN active_ends_at TEXT`);
 }
+
+if (!hasColumn("pacts", "environment")) {
+  db.exec(`ALTER TABLE pacts ADD COLUMN environment TEXT`);
+}
+
+// Backfill any missing env values
+db.prepare(
+  `UPDATE pacts
+   SET environment = ?
+   WHERE environment IS NULL OR TRIM(environment) = ''`
+).run(defaultEnvironment());
 
 // --------------------
 // Helpers
@@ -121,14 +160,12 @@ function requireName(name) {
 
 function requirePactIdString(id) {
   const s = String(id || "").trim();
-  // uint256 decimal string (no signs, no decimals)
   if (!/^\d+$/.test(s)) throw new Error("Invalid id");
   return s;
 }
 
 function canonPayments(arr) {
   if (!Array.isArray(arr)) return [];
-  // normalize types + remove junk + sort deterministically
   return arr
     .map((x) => ({
       views: Number(x?.views),
@@ -178,7 +215,6 @@ function computeMaxPayoutUsd(rowLike) {
 }
 
 function pactEquivalent(oldPactRow, incoming) {
-  // Compare all the “meaningful” fields of a pact in negotiation mode
   const sameDuration =
     Number(oldPactRow.duration_seconds) === Number(incoming.durationSeconds);
 
@@ -226,7 +262,6 @@ async function scrapeTikTokVideo(videoUrl) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      // ✅ correct input key for this actor
       postURLs: [videoUrl],
       resultsPerPage: 1,
       shouldDownloadVideos: false,
@@ -236,21 +271,17 @@ async function scrapeTikTokVideo(videoUrl) {
     }),
   });
 
-  // If Apify returns non-2xx, show the response text to debug quickly
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`Apify HTTP ${res.status}: ${txt || res.statusText}`);
   }
 
   const data = await res.json();
-
   if (!Array.isArray(data) || data.length === 0) {
-    // helpful debug: Apify sometimes returns an empty dataset when URL is malformed/unreachable
     throw new Error("Apify returned 0 items (empty dataset)");
   }
 
   const v = data[0];
-
   return {
     views: Number(v.playCount ?? 0),
     likes: Number(v.diggCount ?? 0),
@@ -269,7 +300,6 @@ async function scrapeInstagramVideo(videoUrl) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      // Instagram scraper expects startUrls array with objects containing url
       startUrls: [{ url: videoUrl }],
       resultsType: "posts",
       resultsLimit: 1,
@@ -282,13 +312,11 @@ async function scrapeInstagramVideo(videoUrl) {
   }
 
   const data = await res.json();
-
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error("Apify returned 0 items (empty dataset)");
   }
 
   const v = data[0];
-
   return {
     views: Number(v.videoViewCount ?? v.playCount ?? v.videoPlayCount ?? 0),
     likes: Number(v.likesCount ?? v.likes ?? 0),
@@ -303,8 +331,6 @@ async function scrapeYouTubeShortsVideo(videoUrl) {
   const endpoint =
     "https://api.apify.com/v2/acts/streamers~youtube-shorts-scraper/run-sync-get-dataset-items";
 
-  // Extract video ID from YouTube URL if it's a full URL
-  // YouTube URLs can be: https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID or https://www.youtube.com/shorts/VIDEO_ID
   let videoId = null;
   if (videoUrl.includes("youtube.com/shorts/")) {
     videoId = videoUrl.split("/shorts/")[1].split("?")[0];
@@ -318,8 +344,9 @@ async function scrapeYouTubeShortsVideo(videoUrl) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      // YouTube Shorts scraper can accept video URLs directly
-      startUrls: videoId ? [{ url: `https://www.youtube.com/watch?v=${videoId}` }] : [{ url: videoUrl }],
+      startUrls: videoId
+        ? [{ url: `https://www.youtube.com/watch?v=${videoId}` }]
+        : [{ url: videoUrl }],
       maxShortsPerSearch: 1,
     }),
   });
@@ -330,13 +357,11 @@ async function scrapeYouTubeShortsVideo(videoUrl) {
   }
 
   const data = await res.json();
-
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error("Apify returned 0 items (empty dataset)");
   }
 
   const v = data[0];
-
   return {
     views: Number(v.viewCount ?? v.views ?? 0),
     likes: Number(v.likeCount ?? v.likes ?? 0),
@@ -344,8 +369,7 @@ async function scrapeYouTubeShortsVideo(videoUrl) {
   };
 }
 
-// double check math on this
-
+// payout math helpers
 function canon(arr) {
   return (Array.isArray(arr) ? arr : [])
     .map((x) => ({ views: Number(x?.views), payout: Number(x?.payout) }))
@@ -368,15 +392,12 @@ function progressPayoutAtViewsFromRow(pactRow, x) {
   const views = Math.max(0, Number(x || 0));
   if (views <= 0) return 0;
 
-  // if past last milestone -> last payout
   if (views >= ms[ms.length - 1].views) return ms[ms.length - 1].payout;
 
-  // if before first milestone -> linear from 0 to first payout
   if (views <= ms[0].views) {
     return (views / ms[0].views) * ms[0].payout;
   }
 
-  // between milestones -> interpolate
   for (let i = 1; i < ms.length; i++) {
     const a = ms[i - 1];
     const b = ms[i];
@@ -435,9 +456,11 @@ app.post("/api/pacts", (req, res) => {
       signature,
 
       replacesPactId,
+      environment,
     } = req.body;
 
     const pactName = requireName(name);
+    const env = requireEnvironment(environment || defaultEnvironment());
 
     const proposer = requireAddress(proposerAddress, "proposer");
     const counterparty = requireAddress(counterpartyAddress, "counterparty");
@@ -453,13 +476,11 @@ app.post("/api/pacts", (req, res) => {
     const dur = Number(durationSeconds);
     if (!Number.isInteger(dur) || dur <= 0) throw new Error("Invalid duration");
 
-    // must be disabled or locked
     if (progressEnabled && !progressLocked)
       throw new Error("Progress Pay must be saved or disabled");
     if (aonEnabled && !aonLocked)
       throw new Error("All-or-Nothing Pay must be saved or disabled");
 
-    // must have at least one payment
     const hasProgress =
       !!progressEnabled && canonPayments(progressMilestones).length > 0;
     const hasAon = !!aonEnabled && canonPayments(aonRewards).length > 0;
@@ -468,7 +489,6 @@ app.post("/api/pacts", (req, res) => {
       throw new Error("Must include at least one payment");
     }
 
-    // Ethereum verification (signature)
     verifySignatureOrThrow({ message, signature, expectedAddress: proposer });
 
     let oldId = null;
@@ -476,7 +496,9 @@ app.post("/api/pacts", (req, res) => {
 
     if (replacesPactId != null) {
       oldId = requirePactIdString(replacesPactId);
-      oldPact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(oldId);
+      oldPact = db
+        .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+        .get(oldId, env);
 
       if (!oldPact) throw new Error("Old pact not found");
 
@@ -489,7 +511,6 @@ app.post("/api/pacts", (req, res) => {
       }
     }
 
-    // ✅ prevent no-op negotiation (only when replacing an existing pact)
     if (oldPact) {
       if (
         pactEquivalent(oldPact, {
@@ -508,7 +529,6 @@ app.post("/api/pacts", (req, res) => {
       }
     }
 
-    // Determine sponsor/creator addresses from proposer role
     const sponsorAddress = proposerRole === "sponsor" ? proposer : counterparty;
     const creatorAddress = proposerRole === "creator" ? proposer : counterparty;
 
@@ -516,26 +536,28 @@ app.post("/api/pacts", (req, res) => {
     const pactId = newPactId();
 
     const stmt = db.prepare(`
-  INSERT INTO pacts (
-    id,
-    created_at, updated_at,
-    name,
-    creator_address, sponsor_address,
-    proposer_role, proposer_address,
-    counterparty_address,
-    duration_seconds,
-    progress_enabled, progress_locked, progress_json,
-    aon_enabled, aon_locked, aon_json,
-    status,
-    replaces_pact_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`);
+      INSERT INTO pacts (
+        id,
+        created_at, updated_at,
+        environment,
+        name,
+        creator_address, sponsor_address,
+        proposer_role, proposer_address,
+        counterparty_address,
+        duration_seconds,
+        progress_enabled, progress_locked, progress_json,
+        aon_enabled, aon_locked, aon_json,
+        status,
+        replaces_pact_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
     const runTx = db.transaction(() => {
-      const info = stmt.run(
-        pactId, // ✅ NEW: this must be FIRST because your INSERT includes id
+      stmt.run(
+        pactId,
         t,
         t,
+        env,
         pactName,
         creatorAddress,
         sponsorAddress,
@@ -557,15 +579,15 @@ app.post("/api/pacts", (req, res) => {
         db.prepare(
           `UPDATE pacts
            SET status = 'replaced', updated_at = ?
-           WHERE id = ?`
-        ).run(t, oldId);
+           WHERE id = ? AND environment = ?`
+        ).run(t, oldId, env);
       }
 
-      return info;
+      return true;
     });
 
-    const info = runTx();
-    res.json({ ok: true, pactId });
+    runTx();
+    res.json({ ok: true, pactId, environment: env });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -575,6 +597,7 @@ app.post("/api/pacts", (req, res) => {
 app.get("/api/pacts", (req, res) => {
   try {
     const { address, role, status, bucket } = req.query;
+    const env = getEnvFromReq(req);
 
     if (!address || !ethers.isAddress(address))
       throw new Error("Invalid address");
@@ -583,7 +606,9 @@ app.get("/api/pacts", (req, res) => {
     let where = "";
     const params = [];
 
-    // role filter (who the pact belongs to)
+    where += (where ? " AND " : "") + "environment=?";
+    params.push(env);
+
     if (role === "sponsor") {
       where += (where ? " AND " : "") + "lower(sponsor_address)=?";
       params.push(addr);
@@ -594,7 +619,6 @@ app.get("/api/pacts", (req, res) => {
       throw new Error("role must be sponsor or creator");
     }
 
-    // bucket logic
     if (bucket === "sent_for_review") {
       where +=
         (where ? " AND " : "") + "status=? AND lower(proposer_address)=?";
@@ -604,19 +628,16 @@ app.get("/api/pacts", (req, res) => {
         (where ? " AND " : "") + "status=? AND lower(proposer_address)<>?";
       params.push("sent_for_review", addr);
     } else if (bucket === "created_requires_video_link") {
-      // created + no video link yet
       where +=
         (where ? " AND " : "") +
         "status=? AND (video_link IS NULL OR TRIM(video_link)='')";
       params.push("created");
     } else if (bucket === "created_requires_funding") {
-      // created + video link present
       where +=
         (where ? " AND " : "") +
         "status=? AND (video_link IS NOT NULL AND TRIM(video_link)<> '')";
       params.push("created");
     } else if (bucket === "created") {
-      // fallback (all created)
       where += (where ? " AND " : "") + "status=?";
       params.push("created");
     } else if (status) {
@@ -627,10 +648,10 @@ app.get("/api/pacts", (req, res) => {
     const rows = db
       .prepare(
         `SELECT id, name, created_at, sponsor_address, creator_address, status,
-        proposer_address, proposer_role, video_link,
-        active_started_at, active_ends_at,
-        progress_enabled, progress_json,
-        aon_enabled, aon_json
+                proposer_address, proposer_role, video_link,
+                active_started_at, active_ends_at,
+                progress_enabled, progress_json,
+                aon_enabled, aon_json
          FROM pacts
          WHERE ${where}
          ORDER BY id DESC
@@ -651,11 +672,7 @@ app.get("/api/pacts", (req, res) => {
       active_started_at: r.active_started_at,
       active_ends_at: r.active_ends_at,
       max_payout_usd: computeMaxPayoutUsd(r),
-    }));
-
-    const withMax = rows.map((r) => ({
-      ...r,
-      max_payout_usd: computeMaxPayoutUsd(r),
+      environment: env,
     }));
 
     res.json({ ok: true, rows: outRows });
@@ -668,8 +685,11 @@ app.get("/api/pacts", (req, res) => {
 app.get("/api/pacts/:id", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
-    const row = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const row = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
 
     if (!row) return res.status(404).json({ ok: false, error: "Not found" });
 
@@ -677,11 +697,14 @@ app.get("/api/pacts/:id", (req, res) => {
 
     const replaced =
       row.replaces_pact_id != null
-        ? db.prepare(`SELECT * FROM pacts WHERE id=?`).get(row.replaces_pact_id)
+        ? db
+            .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+            .get(row.replaces_pact_id, env)
         : null;
 
     res.json({
       ok: true,
+      environment: env,
       pact: {
         ...row,
         max_payout_usd: maxPayoutUsd,
@@ -711,6 +734,7 @@ app.get("/api/pacts/:id", (req, res) => {
 app.post("/api/pacts/:id/accept", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address } = req.body || {};
     if (!address || !ethers.isAddress(address))
@@ -718,20 +742,19 @@ app.post("/api/pacts/:id/accept", (req, res) => {
 
     const addr = normAddr(address);
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // Must be awaiting review
     if (pact.status !== "sent_for_review") {
       throw new Error("Pact is not awaiting review");
     }
 
-    // Only counterparty can accept
     if (normAddr(pact.counterparty_address) !== addr) {
       throw new Error("Not authorized to accept this pact");
     }
 
-    // Extra guard: don't let proposer accept their own pact
     if (normAddr(pact.proposer_address) === addr) {
       throw new Error("Proposer cannot accept their own pact");
     }
@@ -741,10 +764,10 @@ app.post("/api/pacts/:id/accept", (req, res) => {
     db.prepare(
       `UPDATE pacts
        SET status='created', updated_at=?
-       WHERE id=? AND status='sent_for_review'`
-    ).run(t, id);
+       WHERE id=? AND environment=? AND status='sent_for_review'`
+    ).run(t, id, env);
 
-    res.json({ ok: true });
+    res.json({ ok: true, environment: env });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -754,6 +777,7 @@ app.post("/api/pacts/:id/accept", (req, res) => {
 app.post("/api/pacts/:id/video-link", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address, videoLink } = req.body || {};
     if (!address || !ethers.isAddress(address))
@@ -764,7 +788,9 @@ app.post("/api/pacts/:id/video-link", (req, res) => {
     if (link.length > 500) throw new Error("Video link too long");
     if (!/^https?:\/\/\S+$/i.test(link)) throw new Error("Invalid link format");
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
     if (String(pact.status) !== "created") {
@@ -776,13 +802,11 @@ app.post("/api/pacts/:id/video-link", (req, res) => {
     }
 
     const t = nowIso();
-    db.prepare(`UPDATE pacts SET video_link=?, updated_at=? WHERE id=?`).run(
-      link,
-      t,
-      id
-    );
+    db.prepare(
+      `UPDATE pacts SET video_link=?, updated_at=? WHERE id=? AND environment=?`
+    ).run(link, t, id, env);
 
-    res.json({ ok: true });
+    res.json({ ok: true, environment: env });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -792,6 +816,7 @@ app.post("/api/pacts/:id/video-link", (req, res) => {
 app.post("/api/pacts/:id/create-sig", async (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address, tokenDecimals, escrowAddress, chainId } = req.body || {};
     if (!address || !ethers.isAddress(address))
@@ -802,33 +827,30 @@ app.post("/api/pacts/:id/create-sig", async (req, res) => {
       throw new Error("Invalid tokenDecimals");
     }
 
-    // ✅ validate escrowAddress
     if (!escrowAddress || !ethers.isAddress(escrowAddress)) {
       throw new Error("Missing escrowAddress");
     }
     const escrow = ethers.getAddress(escrowAddress);
 
-    // ✅ validate chainId (must be Sepolia for your setup)
     const cid = Number(chainId);
     if (!Number.isInteger(cid)) throw new Error("Missing chainId");
     if (cid !== 11155111) throw new Error("Wrong chainId (expected Sepolia)");
 
     const addr = normAddr(address);
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // must be sponsor
     if (normAddr(pact.sponsor_address) !== addr) {
       throw new Error("Only sponsor can create on-chain signature");
     }
 
-    // your DB says "created" is the state prior to funding
     if (String(pact.status) !== "created") {
       throw new Error("Pact must be Created to sign on-chain creation");
     }
 
-    // must have video link before sponsor funds (matches your UI rule)
     if (!String(pact.video_link || "").trim()) {
       throw new Error("Video link must be set before funding");
     }
@@ -849,7 +871,6 @@ app.post("/api/pacts/:id/create-sig", async (req, res) => {
     const creator = requireAddress(pact.creator_address, "creator");
     const sponsor = requireAddress(pact.sponsor_address, "sponsor");
 
-    // expiry (10 minutes)
     const expiry = Math.floor(Date.now() / 1000) + 10 * 60;
 
     const packedHash = ethers.solidityPackedKeccak256(
@@ -863,23 +884,14 @@ app.post("/api/pacts/:id/create-sig", async (req, res) => {
         "uint256",
         "uint256",
       ],
-      [
-        cid, // ✅ was 11155111
-        escrow,
-        sponsor,
-        id,
-        creator,
-        maxPayoutRaw,
-        durationSeconds,
-        expiry,
-      ]
+      [cid, escrow, sponsor, id, creator, maxPayoutRaw, durationSeconds, expiry]
     );
 
-    // Contract does toEthSignedMessageHash(packedHash), so backend must sign the 32-byte hash as a message.
     const sig = await verifierWallet.signMessage(ethers.getBytes(packedHash));
 
     res.json({
       ok: true,
+      environment: env,
       pactId: id,
       sponsor,
       creator,
@@ -898,11 +910,13 @@ app.post("/api/pacts/:id/create-sig", async (req, res) => {
 app.post("/api/pacts/:id/sync-views", async (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // ✅ disallow syncing after deadline
     if (pact.active_ends_at) {
       const end = Date.parse(pact.active_ends_at);
       if (Number.isFinite(end) && Date.now() > end) {
@@ -917,12 +931,14 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
     const platform = (() => {
       const u = String(pact.video_link || "").toLowerCase();
       if (u.includes("tiktok.com")) return "tiktok";
-      if (u.includes("instagram.com") || u.includes("instagr.am")) return "instagram";
-      if (u.includes("youtube.com/shorts/") || (u.includes("youtube.com") && u.includes("shorts"))) return "youtube_shorts";
-      if (u.includes("youtu.be/")) {
-        // Could be a short, but we'll treat youtu.be links as potential shorts
+      if (u.includes("instagram.com") || u.includes("instagr.am"))
+        return "instagram";
+      if (
+        u.includes("youtube.com/shorts/") ||
+        (u.includes("youtube.com") && u.includes("shorts"))
+      )
         return "youtube_shorts";
-      }
+      if (u.includes("youtu.be/")) return "youtube_shorts";
       return "unknown";
     })();
 
@@ -934,7 +950,9 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
     } else if (platform === "youtube_shorts") {
       stats = await scrapeYouTubeShortsVideo(pact.video_link);
     } else {
-      throw new Error(`Unsupported platform. Supported platforms: TikTok, Instagram, YouTube Shorts`);
+      throw new Error(
+        `Unsupported platform. Supported platforms: TikTok, Instagram, YouTube Shorts`
+      );
     }
 
     const now = new Date().toISOString();
@@ -965,30 +983,31 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
 
     const max = computeMaxPayoutUsd(pact);
     const unearned = Math.max(0, max - unlocked);
-    const available = unlocked; // subtract paidOut on frontend
+    const available = unlocked;
 
     db.prepare(
       `
-  UPDATE pacts
-  SET
-    cached_views=?,
-    cached_unlocked=?,
-    cached_unearned=?,
-    cached_available=?,
-    cached_stats_updated_at=?
-  WHERE id=?
-`
-    ).run(stats.views, unlocked, unearned, available, now, id);
+      UPDATE pacts
+      SET
+        cached_views=?,
+        cached_unlocked=?,
+        cached_unearned=?,
+        cached_available=?,
+        cached_stats_updated_at=?
+      WHERE id=? AND environment=?
+    `
+    ).run(stats.views, unlocked, unearned, available, now, id, env);
 
     res.json({
       ok: true,
+      environment: env,
       platform,
       views: stats.views,
       likes: stats.likes,
       comments: stats.comments,
       unlockedPayout: unlocked,
       unearnedPayout: unearned,
-      availablePayout: available, // backend definition: same as unlocked for now
+      availablePayout: available,
       statsUpdatedAt: now,
     });
   } catch (e) {
@@ -1000,6 +1019,7 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
 app.delete("/api/pacts/:id/created", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address } = req.query;
     if (!address || !ethers.isAddress(address))
@@ -1007,15 +1027,15 @@ app.delete("/api/pacts/:id/created", (req, res) => {
 
     const addr = normAddr(address);
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // Only allowed when created
     if (String(pact.status) !== "created") {
       throw new Error("Only created pacts can be deleted here");
     }
 
-    // Either party can delete
     const isSponsor = normAddr(pact.sponsor_address) === addr;
     const isCreator = normAddr(pact.creator_address) === addr;
 
@@ -1023,18 +1043,19 @@ app.delete("/api/pacts/:id/created", (req, res) => {
       throw new Error("Not authorized to delete this pact");
     }
 
-    db.prepare(`DELETE FROM pacts WHERE id=?`).run(id);
+    db.prepare(`DELETE FROM pacts WHERE id=? AND environment=?`).run(id, env);
 
-    res.json({ ok: true });
+    res.json({ ok: true, environment: env });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
 });
 
-// Delete (or reject) pact
+// Delete (or reject) pact (only while sent_for_review)
 app.delete("/api/pacts/:id", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address } = req.query;
     if (!address || !ethers.isAddress(address))
@@ -1042,10 +1063,11 @@ app.delete("/api/pacts/:id", (req, res) => {
 
     const addr = normAddr(address);
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // Only proposer OR counterparty can delete/reject
     const isProposer = normAddr(pact.proposer_address) === addr;
     const isCounterparty = normAddr(pact.counterparty_address) === addr;
 
@@ -1053,14 +1075,13 @@ app.delete("/api/pacts/:id", (req, res) => {
       throw new Error("Not authorized to delete/reject this pact");
     }
 
-    // Only allowed while sent_for_review
     if (pact.status !== "sent_for_review") {
       throw new Error("Pact can no longer be deleted");
     }
 
-    db.prepare(`DELETE FROM pacts WHERE id=?`).run(id);
+    db.prepare(`DELETE FROM pacts WHERE id=? AND environment=?`).run(id, env);
 
-    res.json({ ok: true });
+    res.json({ ok: true, environment: env });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -1070,6 +1091,7 @@ app.delete("/api/pacts/:id", (req, res) => {
 app.delete("/api/pacts/:id/archive", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address } = req.query;
     if (!address || !ethers.isAddress(address))
@@ -1077,10 +1099,11 @@ app.delete("/api/pacts/:id/archive", (req, res) => {
 
     const addr = normAddr(address);
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // Only proposer OR counterparty can delete
     const isProposer = normAddr(pact.proposer_address) === addr;
     const isCounterparty = normAddr(pact.counterparty_address) === addr;
 
@@ -1088,15 +1111,14 @@ app.delete("/api/pacts/:id/archive", (req, res) => {
       throw new Error("Not authorized to delete this pact");
     }
 
-    // Only allowed for replaced or other archived statuses
     const archivedStatuses = ["replaced"];
     if (!archivedStatuses.includes(pact.status)) {
       throw new Error("Only archived pacts can be deleted from Archive");
     }
 
-    db.prepare(`DELETE FROM pacts WHERE id=?`).run(id);
+    db.prepare(`DELETE FROM pacts WHERE id=? AND environment=?`).run(id, env);
 
-    res.json({ ok: true });
+    res.json({ ok: true, environment: env });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -1106,24 +1128,25 @@ app.delete("/api/pacts/:id/archive", (req, res) => {
 app.post("/api/pacts/:id/archive", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address } = req.query || {};
     const { signature, message } = req.body || {};
-    
+
     if (!address || !ethers.isAddress(address))
       throw new Error("Invalid address");
 
     const addr = normAddr(address);
 
-    // Verify signature
     if (signature && message) {
       verifySignatureOrThrow({ message, signature, expectedAddress: addr });
     }
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // Only proposer OR counterparty can archive
     const isProposer = normAddr(pact.proposer_address) === addr;
     const isCounterparty = normAddr(pact.counterparty_address) === addr;
 
@@ -1131,19 +1154,17 @@ app.post("/api/pacts/:id/archive", (req, res) => {
       throw new Error("Not authorized to archive this pact");
     }
 
-    // Only allow archiving active pacts (that are completed)
     if (String(pact.status) !== "active") {
       throw new Error("Only active pacts can be archived");
     }
 
     const t = nowIso();
-    
-    // Change status to "replaced" (which is what Archive section shows)
-    db.prepare(
-      `UPDATE pacts SET status='replaced', updated_at=? WHERE id=?`
-    ).run(t, id);
 
-    res.json({ ok: true });
+    db.prepare(
+      `UPDATE pacts SET status='replaced', updated_at=? WHERE id=? AND environment=?`
+    ).run(t, id, env);
+
+    res.json({ ok: true, environment: env });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -1152,20 +1173,21 @@ app.post("/api/pacts/:id/archive", (req, res) => {
 app.post("/api/pacts/:id/mark-active", (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address } = req.body || {};
     if (!address || !ethers.isAddress(address))
       throw new Error("Invalid address");
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // only sponsor can mark active
     if (normAddr(pact.sponsor_address) !== normAddr(address)) {
       throw new Error("Only sponsor can mark pact active");
     }
 
-    // only allow from created -> active
     if (String(pact.status) !== "created") {
       throw new Error("Pact must be Created to mark active");
     }
@@ -1177,16 +1199,16 @@ app.post("/api/pacts/:id/mark-active", (req, res) => {
 
     db.prepare(
       `
-  UPDATE pacts
-  SET status='active',
-      active_started_at=?,
-      active_ends_at=?,
-      updated_at=?
-  WHERE id=?
-`
-    ).run(startIso, endIso, startIso, id);
+      UPDATE pacts
+      SET status='active',
+          active_started_at=?,
+          active_ends_at=?,
+          updated_at=?
+      WHERE id=? AND environment=?
+    `
+    ).run(startIso, endIso, startIso, id, env);
 
-    res.json({ ok: true });
+    res.json({ ok: true, environment: env });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || "Bad request" });
   }
@@ -1195,16 +1217,18 @@ app.post("/api/pacts/:id/mark-active", (req, res) => {
 app.post("/api/pacts/:id/payout-sig", async (req, res) => {
   try {
     const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
 
     const { address, totalEarnedUsd, tokenDecimals, escrowAddress, chainId } =
       req.body || {};
     if (!address || !ethers.isAddress(address))
       throw new Error("Invalid address");
 
-    const pact = db.prepare(`SELECT * FROM pacts WHERE id=?`).get(id);
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
     if (!pact) throw new Error("Pact not found");
 
-    // only creator can claim
     if (normAddr(pact.creator_address) !== normAddr(address)) {
       throw new Error("Only creator can claim");
     }
@@ -1226,17 +1250,14 @@ app.post("/api/pacts/:id/payout-sig", async (req, res) => {
     if (!Number.isFinite(earned) || earned < 0)
       throw new Error("Invalid totalEarnedUsd");
 
-    // convert to token units (2 decimals)
     const cents = Math.round(earned * 100);
     const totalEarnedRaw = ethers.parseUnits(
       (cents / 100).toFixed(2),
       decimals
     );
 
-    // expiry (10 min)
     const expiry = Math.floor(Date.now() / 1000) + 10 * 60;
 
-    // Must match contract digest: (chainid, this, pactId, totalEarned, expiry)
     const packedHash = ethers.solidityPackedKeccak256(
       ["uint256", "address", "uint256", "uint256", "uint256"],
       [cid, escrow, id, totalEarnedRaw, expiry]
@@ -1246,6 +1267,7 @@ app.post("/api/pacts/:id/payout-sig", async (req, res) => {
 
     res.json({
       ok: true,
+      environment: env,
       pactId: id,
       totalEarnedRaw: totalEarnedRaw.toString(),
       expiry,

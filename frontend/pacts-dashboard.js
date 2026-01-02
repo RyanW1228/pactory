@@ -3,8 +3,9 @@ import {
   getRPCUrl,
   getMNEEAddress,
   getEnvironment,
-  PACT_ESCROW_ADDRESS,
+  getPactEscrowAddress,
 } from "./constants.js";
+
 import { PactEscrowABI } from "./pactEscrowAbi.js";
 
 const ERC20ABI = [
@@ -26,6 +27,17 @@ const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",
 ];
+
+const ENV = getEnvironment(); // "testing" | "production"
+
+function withEnv(pathOrUrl) {
+  const u = pathOrUrl.startsWith("http")
+    ? new URL(pathOrUrl)
+    : new URL(pathOrUrl, API_BASE); // ✅ forces backend origin
+
+  u.searchParams.set("env", getEnvironment());
+  return u.toString();
+}
 
 // DOM
 const homeButton = document.getElementById("homeButton");
@@ -177,12 +189,12 @@ function attachManageHandler(listEl) {
       delBtn.style.cursor = "not-allowed";
 
       try {
-        const resp = await fetch(
+        const url = withEnv(
           `${API_BASE}/api/pacts/${encodeURIComponent(
             pactId
-          )}/created?address=${encodeURIComponent(address)}`,
-          { method: "DELETE" }
+          )}/created?address=${encodeURIComponent(address)}`
         );
+        const resp = await fetch(url, { method: "DELETE" });
 
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.ok) {
@@ -221,12 +233,12 @@ function attachManageHandler(listEl) {
       delArchiveBtn.style.cursor = "not-allowed";
 
       try {
-        const resp = await fetch(
+        const url = withEnv(
           `${API_BASE}/api/pacts/${encodeURIComponent(
             pactId
-          )}/archive?address=${encodeURIComponent(address)}`,
-          { method: "DELETE" }
+          )}/archive?address=${encodeURIComponent(address)}`
         );
+        const resp = await fetch(url, { method: "DELETE" });
 
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.ok) {
@@ -289,9 +301,11 @@ async function loadSentForReview(mode) {
   attachManageHandler(listEl);
 
   try {
-    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
-      address
-    )}&role=${encodeURIComponent(mode)}&bucket=sent_for_review`;
+    const url = withEnv(
+      `${API_BASE}/api/pacts?address=${encodeURIComponent(
+        address
+      )}&role=${encodeURIComponent(mode)}&bucket=sent_for_review`
+    );
 
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
@@ -348,9 +362,11 @@ async function loadActive(mode) {
   attachManageHandler(listEl);
 
   try {
-    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
-      address
-    )}&role=${encodeURIComponent(mode)}&status=active`;
+    const url = withEnv(
+      `${API_BASE}/api/pacts?address=${encodeURIComponent(
+        address
+      )}&role=${encodeURIComponent(mode)}&status=active`
+    );
 
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
@@ -415,9 +431,11 @@ async function loadAwaitingYourReview(mode) {
   attachManageHandler(listEl);
 
   try {
-    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
-      address
-    )}&role=${encodeURIComponent(mode)}&bucket=awaiting_your_review`;
+    const url = withEnv(
+      `${API_BASE}/api/pacts?address=${encodeURIComponent(
+        address
+      )}&role=${encodeURIComponent(mode)}&bucket=awaiting_your_review`
+    );
 
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
@@ -525,11 +543,13 @@ async function loadCreated(mode) {
     attachManageHandler(listEl);
 
     try {
-      const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
-        address
-      )}&role=${encodeURIComponent(mode)}&bucket=${encodeURIComponent(
-        t.bucket
-      )}`;
+      const url = withEnv(
+        `${API_BASE}/api/pacts?address=${encodeURIComponent(
+          address
+        )}&role=${encodeURIComponent(mode)}&bucket=${encodeURIComponent(
+          t.bucket
+        )}`
+      );
 
       const res = await fetch(url);
       const data = await res.json().catch(() => ({}));
@@ -594,9 +614,11 @@ async function loadArchive(mode) {
   attachManageHandler(listEl);
 
   try {
-    const url = `${API_BASE}/api/pacts?address=${encodeURIComponent(
-      address
-    )}&role=${encodeURIComponent(mode)}&status=replaced`;
+    const url = withEnv(
+      `${API_BASE}/api/pacts?address=${encodeURIComponent(
+        address
+      )}&role=${encodeURIComponent(mode)}&status=replaced`
+    );
 
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
@@ -682,7 +704,7 @@ async function initContracts() {
   provider = new ethers.JsonRpcProvider(getRPCUrl());
 
   // read-only contracts (no signer)
-  escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, provider);
+  escrow = new ethers.Contract(getPactEscrowAddress(), PactEscrowABI, provider);
   mnee = new ethers.Contract(getMNEEAddress(), ERC20ABI, provider);
 
   // ✅ expose for debugging in DevTools

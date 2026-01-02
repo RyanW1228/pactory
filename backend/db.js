@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS pacts (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
 
+  environment TEXT NOT NULL,
+
   name TEXT NOT NULL,
 
   creator_address TEXT NOT NULL,
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS video_stats (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pacts_status ON pacts(status);
+CREATE INDEX IF NOT EXISTS idx_pacts_env ON pacts(environment);
 CREATE INDEX IF NOT EXISTS idx_pacts_sponsor ON pacts(sponsor_address);
 CREATE INDEX IF NOT EXISTS idx_pacts_creator ON pacts(creator_address);
 CREATE INDEX IF NOT EXISTS idx_pacts_replaces ON pacts(replaces_pact_id);

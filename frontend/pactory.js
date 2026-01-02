@@ -1,27 +1,13 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
-import {
-  RPC_URL,
-  MNEE_ADDRESS,
-  PACT_ESCROW_ADDRESS,
-  getMNEEAddress,
-} from "./constants.js";
-import { PactEscrowABI } from "./pactEscrowAbi.js";
-
-const ERC20_ABI = [
-  "function balanceOf(address) view returns (uint256)",
-  "function decimals() view returns (uint8)",
-  "function approve(address spender, uint256 amount) returns (bool)", // we must approve before funding
-];
+import { getEnvironment } from "./constants.js";
 
 // DOMs
 // const provider = new ethers.JsonRpcProvider(RPC_URL); // old line
-let provider, signer, escrow, mnee;
 
 const exitButton = document.getElementById("exitButton");
 
 const defaultRoleText = document.getElementById("defaultRoleText");
 const toggleRoleButton = document.getElementById("toggleRoleButton"); // Now a checkbox input
-const fundPactTestButton = document.getElementById("fundPactTestButton");
 
 const counterpartyLabel = document.getElementById("counterpartyLabel");
 const counterpartyInput = document.getElementById("counterpartyInput");
@@ -202,7 +188,12 @@ function coerceMilestones(arr) {
 async function loadNegotiatePactOrThrow(id) {
   replacesPactIdForSubmit = String(id); // keep uint256 intact
 
-  const res = await fetch(`${API_BASE}/api/pacts/${encodeURIComponent(id)}`);
+  const env = getEnvironment();
+  const res = await fetch(
+    `${API_BASE}/api/pacts/${encodeURIComponent(id)}?env=${encodeURIComponent(
+      env
+    )}`
+  );
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
     throw new Error(data?.error || "Failed to load pact");
@@ -325,7 +316,6 @@ function renderProgressMilestones() {
       const isLatest = i === progressMilestones.length - 1;
       const editable = !milestonesLocked && isLatest;
       const ro = editable ? "" : "readonly";
-      const dis = editable ? "" : "disabled";
       const rateText = impliedRateText(i);
 
       return `
@@ -345,7 +335,6 @@ function renderProgressMilestones() {
               data-field="views"
               style="width:120px;"
               ${ro}
-              ${dis}
             />
           </div>
 
@@ -360,7 +349,6 @@ function renderProgressMilestones() {
               data-field="payout"
               style="width:120px;"
               ${ro}
-              ${dis}
             />
           </div>
 
@@ -480,7 +468,6 @@ function renderAonRewards() {
       const isLatest = i === aonRewards.length - 1;
       const editable = !aonRewardsLocked && isLatest;
       const ro = editable ? "" : "readonly";
-      const dis = editable ? "" : "disabled";
       const rewardText = aonRewardText(i);
 
       return `
@@ -500,7 +487,6 @@ function renderAonRewards() {
               data-field="views"
               style="width:120px;"
               ${ro}
-              ${dis}
             />
           </div>
 
@@ -515,7 +501,6 @@ function renderAonRewards() {
               data-field="payout"
               style="width:120px;"
               ${ro}
-              ${dis}
             />
           </div>
 
@@ -1584,19 +1569,6 @@ async function verifyEthOwnershipOrAlert() {
   return true;
 }
 
-async function initContracts() {
-  const eth = getMetaMaskProviderOrAlert();
-  if (!eth) throw new Error("MetaMask not available.");
-
-  provider = new ethers.BrowserProvider(eth);
-  signer = await provider.getSigner();
-
-  escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, signer);
-  // Use current environment's MNEE address
-  const mneeAddress = getMNEEAddress();
-  mnee = new ethers.Contract(mneeAddress, ERC20_ABI, signer);
-}
-
 // Confirmation Modal Elements (will be available after DOM loads)
 let roleSwitchModal,
   modalCancelBtn,
@@ -1749,26 +1721,6 @@ toggleRoleButton.onchange = (e) => {
   // The toggle will be reset if user cancels
 };
 
-async function fundPactOnChain(pactId, amountUsd) {
-  await initContracts();
-
-  //convert dollars to MNEE (1 MNEE = $1.00)
-  const amountMnee = ethers.parseUnits(
-    amountUsd.toString(),
-    await mnee.decimals()
-  );
-
-  //approve the escrow contract to spend MNEE
-  const approveTx = await mnee.approve(PACT_ESCROW_ADDRESS, amountMnee);
-  await approveTx.wait();
-
-  //fund the pact
-  const fundTx = await escrow.fund(pactId, amountMnee);
-  await fundTx.wait();
-
-  return true;
-}
-
 counterpartyInput.addEventListener("input", validateCounterparty);
 
 [durationDays, durationHours, durationMinutes].forEach((el) =>
@@ -1787,6 +1739,7 @@ progressMilestonesEl.addEventListener("input", (e) => {
 
   const latestIdx = progressMilestones.length - 1;
   if (!milestonesLocked && idx !== latestIdx) return;
+  if (milestonesLocked) return; // locked = ignore edits entirely
 
   progressMilestones[idx][field] = e.target.value;
   renderPayoutGraph();
@@ -1868,6 +1821,7 @@ aonRewardsEl.addEventListener("input", (e) => {
 
   const latestIdx = aonRewards.length - 1;
   if (!aonRewardsLocked && idx !== latestIdx) return;
+  if (aonRewardsLocked) return;
 
   aonRewards[idx][field] = e.target.value;
   renderPayoutGraph();
@@ -2126,6 +2080,7 @@ sendForReviewButton.onclick = async () => {
     );
 
     const payload = {
+      environment: getEnvironment(),
       name: pactName,
       proposerAddress: address,
       proposerRole: role,
