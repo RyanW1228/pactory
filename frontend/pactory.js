@@ -1,5 +1,10 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS, getMNEEAddress } from "./constants.js";
+import {
+  RPC_URL,
+  MNEE_ADDRESS,
+  PACT_ESCROW_ADDRESS,
+  getMNEEAddress,
+} from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
 
 const ERC20_ABI = [
@@ -159,20 +164,20 @@ function renderRole() {
 function formatDurationForNote(days, hours, minutes) {
   const parts = [];
   if (days > 0) {
-    parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+    parts.push(`${days} ${days === 1 ? "day" : "days"}`);
   }
   if (hours > 0) {
-    parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
+    parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
   }
   if (minutes > 0) {
-    parts.push(`${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+    parts.push(`${minutes} ${minutes === 1 ? "minute" : "minutes"}`);
   }
-  
-  if (parts.length === 0) return '0 minutes';
+
+  if (parts.length === 0) return "0 minutes";
   if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return parts.join(' and ');
+  if (parts.length === 2) return parts.join(" and ");
   // For 3 parts: "X days, Y hours, and Z minutes"
-  return parts.slice(0, -1).join(', ') + ', and ' + parts[parts.length - 1];
+  return parts.slice(0, -1).join(", ") + ", and " + parts[parts.length - 1];
 }
 
 function splitDuration(seconds) {
@@ -806,29 +811,29 @@ function renderPayoutGraph() {
   });
 
   const maxY = Math.max(1, ...pts.map((p) => Math.max(p.yBefore, p.yAfter)));
-  
+
   // Generate nice ticks, but ensure maxY is always the top tick
   let yTicks = makeNiceTicks(maxY, 6);
-  
+
   // Ensure maxY is always the highest tick
   const currentMax = Math.max(...yTicks);
   if (currentMax < maxY) {
     // Remove ticks that are above maxY, then add maxY
-    yTicks = yTicks.filter(t => t <= maxY);
+    yTicks = yTicks.filter((t) => t <= maxY);
     if (!yTicks.includes(maxY)) {
       yTicks.push(maxY);
     }
     yTicks.sort((a, b) => a - b);
   } else if (currentMax > maxY) {
     // Replace the highest tick with maxY
-    yTicks = yTicks.filter(t => t < currentMax);
+    yTicks = yTicks.filter((t) => t < currentMax);
     yTicks.push(maxY);
     yTicks.sort((a, b) => a - b);
   } else {
     // maxY is already the max, just ensure sorted
     yTicks.sort((a, b) => a - b);
   }
-  
+
   // Use maxY for scaling (the actual max payout value)
   const sy = (y) => padT + innerH - (y / maxY) * innerH;
 
@@ -1160,16 +1165,16 @@ function updateSliderReadout() {
 
 function updateMaxPayoutNote() {
   if (!maxPayoutNote || !maxPayoutNoteText) return;
-  
+
   // Calculate max payout
   const keys = collectKeyViewsWithInfinity();
   const hasAnyThreshold = keys.some((k) => k !== 0 && k !== X_INF);
-  
+
   if (!hasAnyThreshold) {
-    maxPayoutNote.style.display = 'none';
+    maxPayoutNote.style.display = "none";
     return;
   }
-  
+
   const pts = keys.map((k) => {
     if (k === X_INF) {
       const y = totalPayoutAtViews(Number.MAX_SAFE_INTEGER);
@@ -1180,26 +1185,29 @@ function updateMaxPayoutNote() {
     const yAfter = progress + aonBonusAtViews(k);
     return { k, yBefore, yAfter };
   });
-  
-  const maxPayout = Math.max(1, ...pts.map((p) => Math.max(p.yBefore, p.yAfter)));
-  
+
+  const maxPayout = Math.max(
+    1,
+    ...pts.map((p) => Math.max(p.yBefore, p.yAfter))
+  );
+
   // Get duration
   const days = Number(durationDays.value) || 0;
   const hours = Number(durationHours.value) || 0;
   const minutes = Number(durationMinutes.value) || 0;
-  
+
   // Check if duration is valid
   const totalSeconds = days * 86400 + hours * 3600 + minutes * 60;
   if (totalSeconds <= 0) {
-    maxPayoutNote.style.display = 'none';
+    maxPayoutNote.style.display = "none";
     return;
   }
-  
+
   const durationText = formatDurationForNote(days, hours, minutes);
   const maxPayoutFormatted = formatMoney(maxPayout);
-  
+
   maxPayoutNoteText.innerHTML = `The sponsor will have to lock <strong>${maxPayoutFormatted}</strong> for <strong>${durationText}</strong>.`;
-  maxPayoutNote.style.display = 'block';
+  maxPayoutNote.style.display = "block";
 }
 
 // ✅ NEW: validate pact name (required)
@@ -1250,13 +1258,13 @@ function validateCounterparty() {
   }
 
   // Check allowlist (if function is available from index.js)
-  const isAllowed = window.isAddressAllowed ? window.isAddressAllowed(value) : true;
-  if (!isAllowed) {
-    counterpartyStatus.innerText = `Address is not on your allowlist. Add it on the homepage.`;
-    counterpartyStatus.className = "status-text status-error";
-    if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
-    return false;
-  }
+  // const isAllowed = window.isAddressAllowed ? window.isAddressAllowed(value) : true;
+  // if (!isAllowed) {
+  //   counterpartyStatus.innerText = `Address is not on your allowlist. Add it on the homepage.`;
+  //   counterpartyStatus.className = "status-text status-error";
+  //   if (counterpartyCheckEl) counterpartyCheckEl.style.display = "none";
+  //   return false;
+  // }
 
   // Check if address has a saved name
   const name = localStorage.getItem(`addressName:${value.toLowerCase()}`);
@@ -2007,10 +2015,13 @@ sendForReviewButton.onclick = async () => {
     // 3) Progress pay: disabled OR saved
     if (progressPayEnabled.checked) {
       if (!milestonesLocked) {
-        ppStatus.innerText = "Progress Pay is enabled — please Save it (lock it) or disable it.";
+        ppStatus.innerText =
+          "Progress Pay is enabled — please Save it (lock it) or disable it.";
         ppStatus.className = "status-text status-error";
         if (!hasErrors) {
-          setSendStatus("Progress Pay is enabled — please Save it (lock it) or disable it.");
+          setSendStatus(
+            "Progress Pay is enabled — please Save it (lock it) or disable it."
+          );
         }
         hasErrors = true;
       } else {
@@ -2029,10 +2040,13 @@ sendForReviewButton.onclick = async () => {
     // 4) AON pay: disabled OR saved
     if (aonPayEnabled.checked) {
       if (!aonRewardsLocked) {
-        aonStatus.innerText = "All-or-Nothing Pay is enabled — please Save it (lock it) or disable it.";
+        aonStatus.innerText =
+          "All-or-Nothing Pay is enabled — please Save it (lock it) or disable it.";
         aonStatus.className = "status-text status-error";
         if (!hasErrors) {
-          setSendStatus("All-or-Nothing Pay is enabled — please Save it (lock it) or disable it.");
+          setSendStatus(
+            "All-or-Nothing Pay is enabled — please Save it (lock it) or disable it."
+          );
         }
         hasErrors = true;
       } else {

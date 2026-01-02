@@ -1,5 +1,10 @@
 import { ethers } from "./ethers-6.7.esm.min.js";
-import { RPC_URL, MNEE_ADDRESS, PACT_ESCROW_ADDRESS, getEnvironment, getMNEEAddress } from "./constants.js";
+import {
+  getRPCUrl,
+  getMNEEAddress,
+  getEnvironment,
+  PACT_ESCROW_ADDRESS,
+} from "./constants.js";
 import { PactEscrowABI } from "./pactEscrowAbi.js";
 
 const ERC20ABI = [
@@ -129,7 +134,7 @@ async function refreshDashboard() {
   dashboardTitle.innerText =
     mode === "sponsor" ? "Your Sponsor Pacts" : "Your Creator Pacts";
   currentViewSpan.innerText = mode === "sponsor" ? "Sponsor" : "Creator";
-  
+
   // Update toggle state: checked = creator, unchecked = sponsor
   if (toggleViewButton) {
     toggleViewButton.checked = mode === "creator";
@@ -206,7 +211,9 @@ function attachManageHandler(listEl) {
       const pactId = delArchiveBtn.getAttribute("data-delete-archive");
       if (!pactId) return;
 
-      const ok = confirm("Delete this archived pact?\n\nThis cannot be undone.");
+      const ok = confirm(
+        "Delete this archived pact?\n\nThis cannot be undone."
+      );
       if (!ok) return;
 
       delArchiveBtn.disabled = true;
@@ -309,7 +316,9 @@ async function loadSentForReview(mode) {
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
-            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(
+              other
+            )}</div>
             <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
@@ -366,7 +375,9 @@ async function loadActive(mode) {
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
-            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(
+              other
+            )}</div>
             <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
@@ -431,7 +442,9 @@ async function loadAwaitingYourReview(mode) {
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
-            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(
+              other
+            )}</div>
             <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
@@ -541,7 +554,9 @@ async function loadCreated(mode) {
           return `
             <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
               <div style="font-weight:600;">${displayPactTitle(p)}</div>
-              <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
+              <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(
+                other
+              )}</div>
               <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(
                 p
               )}</div>
@@ -606,7 +621,9 @@ async function loadArchive(mode) {
         return `
           <div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:8px 0;">
             <div style="font-weight:600;">${displayPactTitle(p)}</div>
-            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(other)}</div>
+            <div style="font-size:12px; opacity:0.8;">Other party: ${formatAddressWithName(
+              other
+            )}</div>
             <div style="font-size:12px; opacity:0.8;">${maxPayoutLine(p)}</div>
             <div style="font-size:12px; opacity:0.8;">Created: ${formatEastern(
               p.created_at
@@ -639,7 +656,7 @@ async function loadMneeBalanceSafe() {
   if (!mneeBalanceSpan) return;
 
   try {
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const provider = new ethers.JsonRpcProvider(getRPCUrl());
     // Use current environment's MNEE address
     const mneeAddress = getMNEEAddress();
     const token = new ethers.Contract(mneeAddress, ERC20_ABI, provider);
@@ -662,11 +679,11 @@ async function initContracts() {
     return;
   }
 
-  provider = new ethers.JsonRpcProvider(RPC_URL);
+  provider = new ethers.JsonRpcProvider(getRPCUrl());
 
   // read-only contracts (no signer)
   escrow = new ethers.Contract(PACT_ESCROW_ADDRESS, PactEscrowABI, provider);
-  mnee = new ethers.Contract(MNEE_ADDRESS, ERC20ABI, provider);
+  mnee = new ethers.Contract(getMNEEAddress(), ERC20ABI, provider);
 
   // ✅ expose for debugging in DevTools
   window.provider = provider;
@@ -693,14 +710,17 @@ async function init() {
   try {
     // Update MNEE label on page load
     updateMneeLabel();
-    
+
     // Listen for environment changes
-    window.addEventListener("storage", (e) => {
+    window.addEventListener("storage", async (e) => {
       if (e.key === "pactory-environment") {
         updateMneeLabel();
+        await initContracts();
+        await loadMneeBalanceSafe();
+        await refreshDashboard();
       }
     });
-    
+
     homeButton?.addEventListener("click", () => {
       window.location.href = "./index.html";
     });
@@ -723,7 +743,8 @@ async function init() {
         setViewMode(nextMode);
         return;
       }
-      currentViewText.textContent = currentMode === "sponsor" ? "Sponsor" : "Creator";
+      currentViewText.textContent =
+        currentMode === "sponsor" ? "Sponsor" : "Creator";
       nextViewText.textContent = nextMode === "sponsor" ? "Sponsor" : "Creator";
       viewSwitchModal.classList.add("show");
       viewSwitchModal.style.display = "flex";
@@ -774,15 +795,15 @@ async function init() {
       toggleViewButton.onchange = () => {
         const cur = getViewMode();
         const next = toggleViewButton.checked ? "creator" : "sponsor";
-        
+
         // If already in the target mode, revert the toggle
         if (next === cur) {
           toggleViewButton.checked = !toggleViewButton.checked;
           return;
         }
-        
+
         showViewSwitchModal(cur, next);
-        
+
         // If user cancels, revert the toggle
         // This is handled in hideViewSwitchModal or we need to track cancellation
       };

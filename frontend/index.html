@@ -4,7 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pactory - Welcome</title>
-    <link rel="icon" type="image/png" href="./assets/images/pengu-favicon.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="./assets/images/pengu-favicon.png"
+    />
     <link rel="stylesheet" href="./loading-screen.css" />
     <link rel="stylesheet" href="./fireworks.css" />
     <link rel="stylesheet" href="./music.css" />
@@ -192,7 +196,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: #BBDEFB;
+        background-color: #bbdefb;
         transition: 0.3s;
         border-radius: 28px;
         box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -212,7 +216,7 @@
       }
 
       .toggle-switch input:checked + .toggle-slider {
-        background-color: #1976D2;
+        background-color: #1976d2;
       }
 
       .toggle-switch input:checked + .toggle-slider:before {
@@ -282,13 +286,13 @@
       .modal-content h3 {
         margin: 0 0 16px 0;
         font-size: 1.5rem;
-        color: #1E3A5F;
+        color: #1e3a5f;
         font-weight: 700;
       }
 
       .modal-content p {
         margin: 0 0 24px 0;
-        color: #546E7A;
+        color: #546e7a;
         line-height: 1.6;
         font-size: 1rem;
       }
@@ -310,21 +314,21 @@
       }
 
       .modal-btn-cancel {
-        background: #E3F2FD;
-        color: #1976D2;
+        background: #e3f2fd;
+        color: #1976d2;
       }
 
       .modal-btn-cancel:hover {
-        background: #BBDEFB;
+        background: #bbdefb;
       }
 
       .modal-btn-confirm {
-        background: #1976D2;
+        background: #1976d2;
         color: white;
       }
 
       .modal-btn-confirm:hover {
-        background: #1565C0;
+        background: #1565c0;
         transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(25, 118, 210, 0.25);
       }
@@ -361,7 +365,7 @@
       }
 
       .environment-section {
-        background: #F5F9FF;
+        background: #f5f9ff;
         padding: 16px 20px;
         border-radius: 8px;
         margin-bottom: 24px;
@@ -380,7 +384,7 @@
       }
 
       .mint-btn {
-        background: #FF9800;
+        background: #ff9800;
         color: white;
         border: none;
         padding: 10px 20px;
@@ -393,7 +397,7 @@
       }
 
       .mint-btn:hover:not(:disabled) {
-        background: #F57C00;
+        background: #f57c00;
         transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
       }
@@ -410,33 +414,41 @@
 
       .address-name-item {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
+        flex-direction: column;
         padding: 10px 12px;
         margin-bottom: 8px;
-        background: #F5F9FF;
+        background: #f5f9ff;
         border-radius: 6px;
         border: 1px solid rgba(33, 150, 243, 0.1);
       }
 
       .address-name-item-address {
-        font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
-        font-size: 0.8125rem;
-        color: #546E7A;
-        flex: 1;
-        margin-right: 12px;
-        word-break: break-all;
+        font-family: "SF Mono", "Monaco", "Menlo", monospace;
+        font-size: 0.8rem;
+        color: #546e7a;
+        margin-bottom: 6px;
+
+        /* ✅ show full address */
+        white-space: normal;
+        word-break: break-word;
+      }
+
+      .address-name-item-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
       }
 
       .address-name-item-label {
         font-weight: 600;
-        color: #1E3A5F;
+        color: #1e3a5f;
         flex: 1;
         margin-right: 12px;
       }
 
       .address-name-item-delete {
-        background: #EF5350;
+        background: #ef5350;
         color: white;
         border: none;
         padding: 6px 12px;
@@ -448,7 +460,7 @@
       }
 
       .address-name-item-delete:hover {
-        background: #E53935;
+        background: #e53935;
         transform: translateY(-1px);
       }
     </style>
@@ -468,56 +480,179 @@
           <span class="info-value" id="mneeBalance">-</span>
         </div>
         <div class="info-row">
-          <span class="info-label">ETH Balance</span>
+          <span class="info-label" id="ethLabel">ETH Balance</span>
           <span class="info-value" id="ethBalance">-</span>
         </div>
       </div>
 
       <div class="view-toggle">
         <span class="info-label"
-          >Current view: <span id="defaultModeText">-</span></span
+          >Current View: <span id="defaultModeText">-</span></span
         >
         <label class="toggle-switch">
-          <input type="checkbox" id="toggleDefaultModeButton" disabled>
+          <input type="checkbox" id="toggleDefaultModeButton" disabled />
           <span class="toggle-slider"></span>
         </label>
       </div>
 
-      <div class="environment-section">
-        <div class="environment-selector">
-          <span class="info-label">Environment:</span>
+      <div
+        class="view-toggle"
+        style="flex-direction: column; align-items: stretch; gap: 12px"
+      >
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          "
+        >
+          <span class="info-label">
+            Environment: <span id="environmentText">Testing</span>
+          </span>
           <label class="toggle-switch">
-            <input type="checkbox" id="environmentToggle">
+            <input type="checkbox" id="environmentToggle" />
             <span class="toggle-slider"></span>
           </label>
-          <span id="environmentText" class="info-value" style="margin-left: 12px; font-weight: 600;">Testing</span>
         </div>
-        <button id="mintMockMNEEButton" class="mint-btn" style="display: none;">Mint Mock MNEE</button>
+
+        <button
+          id="mintMockMNEEButton"
+          class="mint-btn"
+          style="display: none; width: 100%"
+        >
+          Mint Mock MNEE
+        </button>
       </div>
 
-      <details class="address-names-section" style="margin-top: 16px; margin-bottom: 24px;">
-        <summary style="cursor: pointer; font-weight: 600; font-size: 1rem; color: #1E3A5F; padding: 12px; background: #F5F9FF; border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.12); list-style: none; display: flex; align-items: center; justify-content: space-between;">
+      <!-- <details
+        class="address-names-section"
+        style="margin-top: 16px; margin-bottom: 24px"
+      >
+        <summary
+          style="
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            color: #1e3a5f;
+            padding: 12px;
+            background: #f5f9ff;
+            border-radius: 8px;
+            border: 1px solid rgba(33, 150, 243, 0.12);
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          "
+        >
           <span>Manage Address Names</span>
-          <span class="dropdown-arrow" style="transition: transform 0.2s; display: inline-block; font-size: 0.875rem; color: #1976D2;">▼</span>
+          <span
+            class="dropdown-arrow"
+            style="
+              transition: transform 0.2s;
+              display: inline-block;
+              font-size: 0.875rem;
+              color: #1976d2;
+            "
+            >▼</span
+          >
         </summary>
-        <div style="margin-top: 16px; padding: 16px; background: #FFFFFF; border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.12);">
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; font-weight: 600; color: #37474F; margin-bottom: 8px; font-size: 0.875rem;">Add or Edit Address Name</label>
-            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-              <input type="text" id="addressNameInput" placeholder="0x..." style="flex: 1; padding: 10px 14px; border: 1px solid rgba(33, 150, 243, 0.2); border-radius: 6px; font-size: 0.875rem; font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;" />
-              <input type="text" id="addressNameLabelInput" placeholder="Name (e.g., John Doe)" style="flex: 1; padding: 10px 14px; border: 1px solid rgba(33, 150, 243, 0.2); border-radius: 6px; font-size: 0.875rem;" />
-              <button id="saveAddressNameButton" style="padding: 10px 20px; background: #1976D2; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.875rem; white-space: nowrap;">Save</button>
+        <div
+          style="
+            margin-top: 16px;
+            padding: 16px;
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid rgba(33, 150, 243, 0.12);
+          "
+        >
+          <div style="margin-bottom: 16px">
+            <label
+              style="
+                display: block;
+                font-weight: 600;
+                color: #37474f;
+                margin-bottom: 8px;
+                font-size: 0.875rem;
+              "
+              >Add or Edit Address Name</label
+            >
+            <div style="display: flex; gap: 8px; margin-bottom: 8px">
+              <input
+                type="text"
+                id="addressNameInput"
+                placeholder="0x..."
+                style="
+                  flex: 1;
+                  padding: 10px 14px;
+                  border: 1px solid rgba(33, 150, 243, 0.2);
+                  border-radius: 6px;
+                  font-size: 0.875rem;
+                  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+                "
+              />
+              <input
+                type="text"
+                id="addressNameLabelInput"
+                placeholder="Name (e.g., John Doe)"
+                style="
+                  flex: 1;
+                  padding: 10px 14px;
+                  border: 1px solid rgba(33, 150, 243, 0.2);
+                  border-radius: 6px;
+                  font-size: 0.875rem;
+                "
+              />
+              <button
+                id="saveAddressNameButton"
+                style="
+                  padding: 10px 20px;
+                  background: #1976d2;
+                  color: white;
+                  border: none;
+                  border-radius: 6px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  font-size: 0.875rem;
+                  white-space: nowrap;
+                "
+              >
+                Save
+              </button>
             </div>
-            <small id="addressNameStatus" style="display: block; margin-top: 8px; font-size: 0.8125rem; color: #546E7A;"></small>
+            <small
+              id="addressNameStatus"
+              style="
+                display: block;
+                margin-top: 8px;
+                font-size: 0.8125rem;
+                color: #546e7a;
+              "
+            ></small>
           </div>
-          <div id="addressNamesList" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(33, 150, 243, 0.1);">
-            <div style="font-weight: 600; color: #37474F; margin-bottom: 12px; font-size: 0.875rem;">Saved Address Names:</div>
-            <div id="addressNamesListContent" style="font-size: 0.875rem;"></div>
+          <div
+            id="addressNamesList"
+            style="
+              margin-top: 16px;
+              padding-top: 16px;
+              border-top: 1px solid rgba(33, 150, 243, 0.1);
+            "
+          >
+            <div
+              style="
+                font-weight: 600;
+                color: #37474f;
+                margin-bottom: 12px;
+                font-size: 0.875rem;
+              "
+            >
+              Saved Address Names:
+            </div>
+            <div id="addressNamesListContent" style="font-size: 0.875rem"></div>
           </div>
         </div>
-      </details>
+      </details> -->
 
-      <details class="address-names-section" style="margin-top: 16px; margin-bottom: 24px;">
+      <!-- <details class="address-names-section" style="margin-top: 16px; margin-bottom: 24px;">
         <summary style="cursor: pointer; font-weight: 600; font-size: 1rem; color: #1E3A5F; padding: 12px; background: #F5F9FF; border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.12); list-style: none; display: flex; align-items: center; justify-content: space-between;">
           <span>Manage Allowlist</span>
           <span class="dropdown-arrow" style="transition: transform 0.2s; display: inline-block; font-size: 0.875rem; color: #1976D2;">▼</span>
@@ -566,7 +701,7 @@
             </div>
           </div>
         </div>
-      </details>
+      </details> -->
 
       <button id="connectButton" class="primary-btn">Connect Wallet</button>
       <button id="viewPactsButton" class="primary-btn">View Pacts</button>
@@ -607,10 +742,18 @@
     <div id="modeSwitchModal" class="modal-overlay">
       <div class="modal-content">
         <h3>Switch View Mode?</h3>
-        <p id="modeSwitchMessage">Are you sure you want to switch from <strong id="currentModeText">Sponsor</strong> to <strong id="nextModeText">Creator</strong> view?</p>
+        <p id="modeSwitchMessage">
+          Are you sure you want to switch from
+          <strong id="currentModeText">Sponsor</strong> to
+          <strong id="nextModeText">Creator</strong> view?
+        </p>
         <div class="modal-buttons">
-          <button class="modal-btn modal-btn-cancel" id="modalCancelBtn">Cancel</button>
-          <button class="modal-btn modal-btn-confirm" id="modalConfirmBtn">Switch</button>
+          <button class="modal-btn modal-btn-cancel" id="modalCancelBtn">
+            Cancel
+          </button>
+          <button class="modal-btn modal-btn-confirm" id="modalConfirmBtn">
+            Switch
+          </button>
         </div>
       </div>
     </div>
