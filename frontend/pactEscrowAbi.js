@@ -22,6 +22,10 @@ export const PactEscrowABI = [
     outputs: [{ name: "", type: "address", internalType: "address" }],
     stateMutability: "view",
   },
+
+  // -------------------------
+  // create / fund / payout
+  // -------------------------
   {
     type: "function",
     name: "createPactWithSig",
@@ -56,6 +60,26 @@ export const PactEscrowABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+
+  // -------------------------
+  // NEW: finalize after deadline (required before refund)
+  // -------------------------
+  {
+    type: "function",
+    name: "finalizeAfterDeadlineWithSig",
+    inputs: [
+      { name: "pactId", type: "uint256", internalType: "uint256" },
+      { name: "finalEarned", type: "uint256", internalType: "uint256" },
+      { name: "expiry", type: "uint256", internalType: "uint256" },
+      { name: "sig", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+
+  // -------------------------
+  // refund (now requires finalized=true)
+  // -------------------------
   {
     type: "function",
     name: "refundAfterDeadline",
@@ -63,6 +87,10 @@ export const PactEscrowABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+
+  // -------------------------
+  // view: pacts now returns 2 extra fields
+  // -------------------------
   {
     type: "function",
     name: "pacts",
@@ -75,7 +103,22 @@ export const PactEscrowABI = [
       { name: "status", type: "uint8", internalType: "enum PactEscrow.Status" },
       { name: "paidOut", type: "uint256", internalType: "uint256" },
       { name: "refunded", type: "bool", internalType: "bool" },
+
+      // NEW:
+      { name: "finalEarned", type: "uint256", internalType: "uint256" },
+      { name: "finalized", type: "bool", internalType: "bool" },
     ],
     stateMutability: "view",
+  },
+
+  // (Optional) If you want to listen to this event in frontend:
+  {
+    type: "event",
+    name: "PactFinalized",
+    inputs: [
+      { name: "pactId", type: "uint256", indexed: true },
+      { name: "finalEarned", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
   },
 ];

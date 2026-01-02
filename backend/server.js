@@ -125,6 +125,68 @@ db.prepare(
 // --------------------
 // Helpers
 // --------------------
+
+function classifyCountableVideoUrl(rawUrl) {
+  let u;
+  try {
+    u = new URL(String(rawUrl || "").trim());
+  } catch {
+    throw new Error("Invalid URL");
+  }
+
+  if (!/^https?:$/.test(u.protocol)) throw new Error("URL must be http(s)");
+  if (/\s/.test(u.href)) throw new Error("URL must not contain spaces");
+
+  const host = u.hostname.replace(/^www\./, "").toLowerCase();
+  const path = u.pathname || "";
+
+  // TikTok: /@user/video/123...
+  if (host.endsWith("tiktok.com")) {
+    if (!/^\/@[^/]+\/video\/\d+/.test(path)) {
+      throw new Error(
+        "TikTok link must be a post: tiktok.com/@user/video/123..."
+      );
+    }
+    return { platform: "tiktok", url: u.href };
+  }
+
+  // Instagram: /reel/{code} or /p/{code}
+  if (host === "instagram.com" || host === "instagr.am") {
+    if (!/^\/(reel|p)\/[A-Za-z0-9_-]+/.test(path)) {
+      throw new Error(
+        "Instagram link must be a Reel or Post: instagram.com/reel/... or instagram.com/p/..."
+      );
+    }
+    return { platform: "instagram", url: u.href };
+  }
+
+  // YouTube Shorts: /shorts/{id}
+  if (host === "youtube.com" && path.startsWith("/shorts/")) {
+    const id = path.split("/shorts/")[1]?.split("/")[0]?.split("?")[0];
+    if (!id || id.length < 6) throw new Error("Invalid YouTube Shorts link");
+    return { platform: "youtube_shorts", url: u.href };
+  }
+
+  // YouTube watch: /watch?v=VIDEOID  ✅ you already support parsing this in scrapeYouTubeShortsVideo
+  if (host === "youtube.com" && path === "/watch") {
+    const v = u.searchParams.get("v");
+    if (!v || v.length < 6)
+      throw new Error("YouTube link must include ?v=VIDEOID");
+    return { platform: "youtube_shorts", url: u.href };
+  }
+
+  // youtu.be/VIDEOID
+  if (host === "youtu.be") {
+    const id = path.replace("/", "").split("?")[0];
+    if (!id || id.length < 6) throw new Error("Invalid youtu.be link");
+    return { platform: "youtube_shorts", url: u.href };
+  }
+
+  throw new Error(
+    "Unsupported platform. Use TikTok post, Instagram Reel/Post, or YouTube Shorts."
+  );
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -788,6 +850,8 @@ app.post("/api/pacts/:id/video-link", (req, res) => {
     if (link.length > 500) throw new Error("Video link too long");
     if (!/^https?:\/\/\S+$/i.test(link)) throw new Error("Invalid link format");
 
+    const { url: canonicalUrl } = classifyCountableVideoUrl(link);
+
     const pact = db
       .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
       .get(id, env);
@@ -804,7 +868,7 @@ app.post("/api/pacts/:id/video-link", (req, res) => {
     const t = nowIso();
     db.prepare(
       `UPDATE pacts SET video_link=?, updated_at=? WHERE id=? AND environment=?`
-    ).run(link, t, id, env);
+    ).run(canonicalUrl, t, id, env);
 
     res.json({ ok: true, environment: env });
   } catch (e) {
@@ -928,19 +992,7 @@ app.post("/api/pacts/:id/sync-views", async (req, res) => {
       throw new Error("No video link attached to pact");
     }
 
-    const platform = (() => {
-      const u = String(pact.video_link || "").toLowerCase();
-      if (u.includes("tiktok.com")) return "tiktok";
-      if (u.includes("instagram.com") || u.includes("instagr.am"))
-        return "instagram";
-      if (
-        u.includes("youtube.com/shorts/") ||
-        (u.includes("youtube.com") && u.includes("shorts"))
-      )
-        return "youtube_shorts";
-      if (u.includes("youtu.be/")) return "youtube_shorts";
-      return "unknown";
-    })();
+    const { platform } = classifyCountableVideoUrl(pact.video_link);
 
     let stats;
     if (platform === "tiktok") {
@@ -1270,6 +1322,101 @@ app.post("/api/pacts/:id/payout-sig", async (req, res) => {
       environment: env,
       pactId: id,
       totalEarnedRaw: totalEarnedRaw.toString(),
+      expiry,
+      sig,
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || "Bad request" });
+  }
+});
+
+// NEW: finalize signature (used AFTER deadline, BEFORE sponsor refund)
+app.post("/api/pacts/:id/finalize-sig", async (req, res) => {
+  try {
+    const id = requirePactIdString(req.params.id);
+    const env = getEnvFromReq(req);
+
+    const { address, finalEarnedUsd, tokenDecimals, escrowAddress, chainId } =
+      req.body || {};
+    if (!address || !ethers.isAddress(address))
+      throw new Error("Invalid address");
+
+    const cid = Number(chainId);
+    if (cid !== 11155111) throw new Error("Wrong chainId (expected Sepolia)");
+
+    if (!escrowAddress || !ethers.isAddress(escrowAddress)) {
+      throw new Error("Missing escrowAddress");
+    }
+    const escrow = ethers.getAddress(escrowAddress);
+
+    const decimals = Number(tokenDecimals);
+    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+      throw new Error("Invalid tokenDecimals");
+    }
+
+    const pact = db
+      .prepare(`SELECT * FROM pacts WHERE id=? AND environment=?`)
+      .get(id, env);
+    if (!pact) throw new Error("Pact not found");
+
+    // sponsor-only finalize/refund flow
+    if (normAddr(pact.sponsor_address) !== normAddr(address)) {
+      throw new Error("Only sponsor can finalize");
+    }
+
+    // must be expired on DB clock (active_ends_at)
+    if (!pact.active_ends_at) throw new Error("Pact has no active end time");
+    const endMs = Date.parse(pact.active_ends_at);
+    if (!Number.isFinite(endMs) || Date.now() <= endMs) {
+      throw new Error("Not expired yet");
+    }
+
+    // IMPORTANT: require a fresh cached_unlocked
+    if (!pact.cached_stats_updated_at) {
+      throw new Error("No cached stats. Click Refresh first.");
+    }
+
+    // client sends what it thinks is final earned (after doing refresh)
+    // we still clamp using DB cached_unlocked + max payout so nobody can inflate it
+    const clientEarned = Number(finalEarnedUsd);
+    if (!Number.isFinite(clientEarned) || clientEarned < 0) {
+      throw new Error("Invalid finalEarnedUsd");
+    }
+
+    const maxUsd = computeMaxPayoutUsd(pact);
+    if (!Number.isFinite(maxUsd) || maxUsd <= 0) {
+      throw new Error("Invalid max payout");
+    }
+
+    const cachedEarned = Number(pact.cached_unlocked ?? 0);
+    if (!Number.isFinite(cachedEarned) || cachedEarned < 0) {
+      throw new Error("Invalid cached_unlocked");
+    }
+
+    // safest: never allow finalize above what backend last computed
+    const clampedUsd = Math.min(clientEarned, cachedEarned, maxUsd);
+
+    const cents = Math.round(clampedUsd * 100);
+    const finalEarnedRaw = ethers.parseUnits(
+      (cents / 100).toFixed(2),
+      decimals
+    );
+
+    const expiry = Math.floor(Date.now() / 1000) + 10 * 60;
+
+    const packedHash = ethers.solidityPackedKeccak256(
+      ["uint256", "address", "uint256", "uint256", "uint256"],
+      [cid, escrow, id, finalEarnedRaw, expiry]
+    );
+
+    const sig = await verifierWallet.signMessage(ethers.getBytes(packedHash));
+
+    res.json({
+      ok: true,
+      environment: env,
+      pactId: id,
+      finalEarnedRaw: finalEarnedRaw.toString(),
+      finalEarnedUsd: Number((cents / 100).toFixed(2)),
       expiry,
       sig,
     });

@@ -244,26 +244,79 @@ function disableEarningsActions({ refreshBtn, claimBtn, errEl, reason }) {
   }
 }
 
-function isValidVideoPlatform(url) {
-  const u = String(url || "").toLowerCase();
-  if (u.includes("tiktok.com")) return { valid: true, platform: "TikTok" };
-  if (u.includes("instagram.com") || u.includes("instagr.am"))
-    return { valid: true, platform: "Instagram" };
-  if (
-    u.includes("youtube.com/shorts/") ||
-    (u.includes("youtube.com") && u.includes("shorts"))
-  )
-    return { valid: true, platform: "YouTube Shorts" };
-  if (
-    u.includes("youtu.be/") ||
-    (u.includes("youtube.com") && u.includes("watch"))
-  )
-    return { valid: true, platform: "YouTube" };
+function isCountableVideoLink(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return { valid: false, error: "Invalid URL." };
+  }
+
+  const host = u.hostname.replace(/^www\./, "").toLowerCase();
+  const path = u.pathname;
+
+  // TikTok: /@user/video/123...
+  if (host.endsWith("tiktok.com")) {
+    const ok = /^\/@[^/]+\/video\/\d+/.test(path);
+    return ok
+      ? { valid: true, platform: "TikTok" }
+      : {
+          valid: false,
+          error: "TikTok link must look like: tiktok.com/@user/video/123...",
+        };
+  }
+
+  // Instagram: /reel/{code} or /p/{code}
+  if (host === "instagram.com" || host === "instagr.am") {
+    const ok = /^\/(reel|p)\/[A-Za-z0-9_-]+/.test(path);
+    return ok
+      ? { valid: true, platform: "Instagram" }
+      : {
+          valid: false,
+          error:
+            "Instagram link must be a Reel or Post: instagram.com/reel/... or instagram.com/p/...",
+        };
+  }
+
+  // YouTube Shorts: /shorts/{id}
+  if (host === "youtube.com" && path.startsWith("/shorts/")) {
+    const ok = /^\/shorts\/[A-Za-z0-9_-]{6,}/.test(path);
+    return ok
+      ? { valid: true, platform: "YouTube Shorts" }
+      : {
+          valid: false,
+          error:
+            "YouTube Shorts link must look like: youtube.com/shorts/VIDEOID",
+        };
+  }
+
+  // YouTube watch: /watch?v=VIDEOID
+  if (host === "youtube.com" && path === "/watch") {
+    const v = u.searchParams.get("v");
+    const ok = /^[A-Za-z0-9_-]{6,}$/.test(v || "");
+    return ok
+      ? { valid: true, platform: "YouTube" }
+      : {
+          valid: false,
+          error: "YouTube link must look like: youtube.com/watch?v=VIDEOID",
+        };
+  }
+
+  // youtu.be/VIDEOID
+  if (host === "youtu.be") {
+    const ok = /^\/[A-Za-z0-9_-]{6,}$/.test(path);
+    return ok
+      ? { valid: true, platform: "YouTube" }
+      : {
+          valid: false,
+          error: "Short YouTube link must look like: youtu.be/VIDEOID",
+        };
+  }
 
   return {
     valid: false,
     error:
-      "Unsupported platform. Please use TikTok, Instagram, or YouTube Shorts links.",
+      "Unsupported platform. Use TikTok, Instagram Reel/Post, or YouTube watch/shorts.",
   };
 }
 
@@ -391,6 +444,10 @@ async function readOnchainPact(pactIdNum) {
     status: pact.status, // 0 Created, 1 Funded, 2 Closed
     refunded: pact.refunded,
     deadline: pact.deadline,
+
+    // NEW (safe even if you don't use yet)
+    finalEarnedRaw: pact.finalEarned,
+    finalized: pact.finalized,
   };
 }
 
@@ -1145,17 +1202,76 @@ if (isActivePact(p)) {
           return;
         }
 
+        // ✅ make sure we have the latest cached_unlocked before finalizing
+        showSecondaryLoadingScreen(
+          "Finalizing pact... (refreshing stats first)"
+        );
+        try {
+          await fetchActiveStats(pactIdStr);
+          p = await fetchLatestPact(pactIdStr);
+        } finally {
+          hideSecondaryLoadingScreen();
+        }
+
+        const finalEarnedUsd = Number(p.cached_unlocked ?? 0);
+        if (!Number.isFinite(finalEarnedUsd) || finalEarnedUsd < 0) {
+          alert("Missing/invalid earned amount. Click Refresh first.");
+          return;
+        }
+
         reclaimBtn.disabled = true;
+
+        const net = await provider.getNetwork();
+        if (Number(net.chainId) !== 11155111) {
+          alert("Switch MetaMask to Sepolia and try again.");
+          return;
+        }
+
+        const decimals = await getTokenDecimals();
+
+        // ✅ get finalize signature from backend
+        const finalizeUrl = withEnv(
+          `${API_BASE}/api/pacts/${encodeURIComponent(pactIdStr)}/finalize-sig`
+        );
+        const finRes = await fetch(finalizeUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address,
+            finalEarnedUsd,
+            tokenDecimals: decimals,
+            escrowAddress: PACT_ESCROW_ADDRESS,
+            chainId: 11155111,
+          }),
+        });
+
+        const finData = await finRes.json().catch(() => ({}));
+        if (!finRes.ok || !finData.ok) {
+          throw new Error(
+            finData?.error || "Failed to fetch finalize signature"
+          );
+        }
 
         const escrow = new ethers.Contract(
           PACT_ESCROW_ADDRESS,
           PactEscrowABI,
           signer
         );
-        const tx = await escrow.refundAfterDeadline(pactIdNum);
-        await tx.wait();
 
-        alert("✅ Reclaimed unspent MNEE!");
+        // ✅ 1) finalize (locks finalEarned on-chain)
+        const tx1 = await escrow.finalizeAfterDeadlineWithSig(
+          pactIdNum,
+          BigInt(finData.finalEarnedRaw),
+          finData.expiry,
+          finData.sig
+        );
+        await tx1.wait();
+
+        // ✅ 2) refund remaining (sponsor gets ONLY max - finalEarned - paidOut)
+        const tx2 = await escrow.refundAfterDeadline(pactIdNum);
+        await tx2.wait();
+
+        alert("✅ Finalized + reclaimed unspent MNEE!");
       } catch (e) {
         alert(`Reclaim failed:\n\n${e?.shortMessage || e?.message || e}`);
       } finally {
@@ -1183,19 +1299,26 @@ if (isActivePact(p)) {
   setInterval(() => renderActiveCountdownTick(p), 1000);
 
   // Auto-disable refresh/claim exactly at end
+  // Auto-disable Refresh exactly at end (Claim stays enabled)
   const endMs = parseIsoSafe(p.active_ends_at);
   if (endMs != null) {
     const delay = endMs - Date.now();
-    const disableNow = () =>
-      disableEarningsActions({
-        refreshBtn,
-        claimBtn,
-        errEl,
-        reason: "Pact duration ended — refreshing/claiming is disabled.",
-      });
 
-    if (delay <= 0) disableNow();
-    else setTimeout(disableNow, delay);
+    const disableRefreshOnly = () => {
+      if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.style.opacity = "0.6";
+        refreshBtn.style.cursor = "not-allowed";
+        refreshBtn.title = "Pact duration ended — refreshing is disabled.";
+      }
+      if (errEl) {
+        errEl.style.display = "block";
+        errEl.innerText = "Pact duration ended — refreshing is disabled.";
+      }
+    };
+
+    if (delay <= 0) disableRefreshOnly();
+    else setTimeout(disableRefreshOnly, delay);
   }
 
   // Refresh click (ONE backend call + then refetch pact)
@@ -1266,16 +1389,6 @@ if (isActivePact(p)) {
   // Claim click (creator only)
   claimBtn.onclick = async () => {
     try {
-      if (isExpired(p)) {
-        alert("Pact duration ended — claiming is disabled.");
-        disableEarningsActions({
-          refreshBtn,
-          claimBtn,
-          errEl,
-          reason: "Pact duration ended — refreshing/claiming is disabled.",
-        });
-        return;
-      }
       if (!window.ethereum) {
         alert("MetaMask not found.");
         return;
@@ -1481,7 +1594,7 @@ if (canInputVideoLink) {
       );
     }
 
-    const platformCheck = isValidVideoPlatform(trimmed);
+    const platformCheck = isCountableVideoLink(trimmed);
     if (!platformCheck.valid) return alert(platformCheck.error);
 
     const sigResult = await verifySignatureForAction(

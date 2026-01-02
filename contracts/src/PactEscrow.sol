@@ -21,7 +21,7 @@ contract PactEscrow {
     enum Status {
         Created,
         Funded,
-        Closed
+        Closed // closed means: finalized and/or sponsor refunded; creator may still withdraw earned remainder
     }
 
     struct Pact {
@@ -32,6 +32,8 @@ contract PactEscrow {
         Status status;
         uint256 paidOut; // total paid to creator so far
         bool refunded; // sponsor remainder refunded
+        uint256 finalEarned; // backend-finalized earned amount at/after deadline
+        bool finalized; // whether finalEarned is locked
     }
 
     mapping(uint256 => Pact) public pacts;
@@ -49,6 +51,7 @@ contract PactEscrow {
         uint256 totalEarned,
         uint256 deltaPaid
     );
+    event PactFinalized(uint256 indexed pactId, uint256 finalEarned);
     event SponsorRefunded(uint256 indexed pactId, uint256 amount);
 
     // ------------------------------------------------------------
@@ -71,7 +74,7 @@ contract PactEscrow {
         require(maxPayout > 0, "invalid max payout");
         require(durationSeconds > 0, "invalid duration");
 
-        // Make sure caller is sponsor (prevents someone else creating a pact for you)
+        // caller must be sponsor
         require(msg.sender == sponsor, "caller not sponsor");
 
         // prevent overwrite
@@ -103,7 +106,9 @@ contract PactEscrow {
             deadline: deadline,
             status: Status.Created,
             paidOut: 0,
-            refunded: false
+            refunded: false,
+            finalEarned: 0,
+            finalized: false
         });
 
         emit PactCreated(pactId, sponsor, creator, maxPayout, deadline);
@@ -120,7 +125,7 @@ contract PactEscrow {
         require(pact.status == Status.Created, "wrong status");
         require(block.timestamp <= pact.deadline, "expired");
 
-        // transfer first, then change status (prevents weird "Funded" state if transfer fails)
+        // transfer first, then change status
         require(
             mnee.transferFrom(msg.sender, address(this), pact.maxPayout),
             "fund failed"
@@ -134,6 +139,10 @@ contract PactEscrow {
     // ------------------------------------------------------------
     // ✅ PAYOUT: backend-authorized incremental payouts
     // ------------------------------------------------------------
+    // Backend signs over (chainid, this, pactId, totalEarned, expiry)
+    // NOTE: totalEarned must be monotonic and <= cap
+    // - Before finalize: cap = maxPayout
+    // - After finalize:  cap = finalEarned (so sponsor refund can't be bypassed by late "earning")
     function payoutWithSig(
         uint256 pactId,
         uint256 totalEarned,
@@ -141,12 +150,17 @@ contract PactEscrow {
         bytes calldata sig
     ) external {
         Pact storage pact = pacts[pactId];
-        require(pact.status == Status.Funded, "not funded");
+
+        require(
+            pact.status == Status.Funded || pact.status == Status.Closed,
+            "wrong status"
+        );
         require(block.timestamp <= expiry, "sig expired");
-        require(totalEarned <= pact.maxPayout, "earned > max");
+
+        uint256 cap = pact.finalized ? pact.finalEarned : pact.maxPayout;
+        require(totalEarned <= cap, "earned > cap");
         require(totalEarned >= pact.paidOut, "non-monotonic");
 
-        // verify backend signature over (chainid, this, pactId, totalEarned, expiry)
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
             keccak256(
                 abi.encodePacked(
@@ -172,17 +186,62 @@ contract PactEscrow {
     }
 
     // ------------------------------------------------------------
-    // ✅ REFUND: after deadline, refund remaining to sponsor
+    // ✅ FINALIZE: after deadline, backend locks in what was actually earned
+    // ------------------------------------------------------------
+    // Backend signs over: (chainid, this, pactId, finalEarned, expiry)
+    // This prevents sponsor refund from depending on whether creator has claimed yet.
+    function finalizeAfterDeadlineWithSig(
+        uint256 pactId,
+        uint256 finalEarned,
+        uint256 expiry,
+        bytes calldata sig
+    ) external {
+        Pact storage pact = pacts[pactId];
+
+        require(pact.status == Status.Funded, "not funded");
+        require(block.timestamp > pact.deadline, "not expired");
+        require(!pact.finalized, "already finalized");
+        require(block.timestamp <= expiry, "sig expired");
+        require(finalEarned <= pact.maxPayout, "earned > max");
+        require(finalEarned >= pact.paidOut, "earned < paid");
+
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
+            keccak256(
+                abi.encodePacked(
+                    block.chainid,
+                    address(this),
+                    pactId,
+                    finalEarned,
+                    expiry
+                )
+            )
+        );
+
+        require(digest.recover(sig) == verifier, "bad sig");
+
+        pact.finalEarned = finalEarned;
+        pact.finalized = true;
+
+        // closed now, but creator can still withdraw up to finalEarned
+        pact.status = Status.Closed;
+
+        emit PactFinalized(pactId, finalEarned);
+    }
+
+    // ------------------------------------------------------------
+    // ✅ REFUND: after deadline + finalize, refund ONLY unearned remainder to sponsor
     // ------------------------------------------------------------
     function refundAfterDeadline(uint256 pactId) external {
         Pact storage pact = pacts[pactId];
-        require(pact.status == Status.Funded, "not funded");
+
+        require(msg.sender == pact.sponsor, "not sponsor");
         require(block.timestamp > pact.deadline, "not expired");
+        require(pact.finalized, "not finalized");
         require(!pact.refunded, "already refunded");
 
-        uint256 remaining = pact.maxPayout - pact.paidOut;
+        uint256 remaining = pact.maxPayout - pact.finalEarned;
+
         pact.refunded = true;
-        pact.status = Status.Closed;
 
         if (remaining > 0) {
             require(mnee.transfer(pact.sponsor, remaining), "refund failed");
