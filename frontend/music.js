@@ -22,7 +22,7 @@ let preloadedTracks = window.pactoryMusic.preloadedTracks;
 const playlist = [
   "./assets/music/Up - Married Life.mp3",
   "./assets/music/Merry-Go-Round of Life - Howl's Moving Castle [Piano]  Joe Hisaishi.mp3",
-  "./assets/music/18. The Flower Garden.mp3"
+  "./assets/music/18. The Flower Garden.mp3",
 ];
 
 // Preload all tracks to prevent buffering (use global if available)
@@ -68,11 +68,15 @@ function preloadTracks() {
     
     // Preload the audio - start loading immediately
     audio.load();
-    
+
     // Pre-fetch the audio data
-    audio.addEventListener("canplaythrough", () => {
-      console.log(`🎵 Track ${index + 1} preloaded`);
-    }, { once: true });
+    audio.addEventListener(
+      "canplaythrough",
+      () => {
+        console.log(`🎵 Track ${index + 1} preloaded`);
+      },
+      { once: true }
+    );
   });
 }
 
@@ -141,7 +145,7 @@ export function initMusic() {
     console.log(`🎵 Track ${currentTrackIndex + 1} ended, moving to next`);
     playNextTrack();
   });
-  
+
   // Preload next track while current is playing to prevent buffering
   let preloadScheduled = false;
   backgroundMusic.addEventListener("timeupdate", () => {
@@ -173,8 +177,15 @@ export function initMusic() {
           // Only restore if we're on the same track
           const savedTrack = localStorage.getItem("pactory-music-track");
           if (savedTrack && parseInt(savedTrack, 10) === currentTrackIndex) {
-            backgroundMusic.currentTime = Math.min(time, backgroundMusic.duration - 0.5);
-            console.log(`🎵 Music restored to track ${currentTrackIndex + 1}, ${time.toFixed(2)}s`);
+            backgroundMusic.currentTime = Math.min(
+              time,
+              backgroundMusic.duration - 0.5
+            );
+            console.log(
+              `🎵 Music restored to track ${
+                currentTrackIndex + 1
+              }, ${time.toFixed(2)}s`
+            );
           }
         },
         { once: true }
@@ -215,7 +226,7 @@ function loadTrack(index) {
     currentTrackIndex = 0; // Loop back to start
     index = 0;
   }
-  
+
   currentTrackIndex = index;
   window.pactoryMusic.currentTrackIndex = currentTrackIndex;
   
@@ -232,7 +243,7 @@ function loadTrack(index) {
 function playNextTrack() {
   const nextIndex = (currentTrackIndex + 1) % playlist.length;
   loadTrack(nextIndex);
-  
+
   // Wait for track to load before playing to prevent buffering
   const playWhenReady = () => {
     if (isMusicEnabled) {
@@ -248,7 +259,7 @@ function playNextTrack() {
       }
     }
   };
-  
+
   if (backgroundMusic.readyState >= 2) {
     // Already loaded, play immediately
     playWhenReady();
@@ -256,7 +267,7 @@ function playNextTrack() {
     // Wait for track to load
     backgroundMusic.addEventListener("canplay", playWhenReady, { once: true });
   }
-  
+
   // Save current track
   localStorage.setItem("pactory-music-track", currentTrackIndex.toString());
   localStorage.removeItem("pactory-music-time"); // Clear time when switching tracks
