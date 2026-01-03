@@ -197,6 +197,14 @@
   margin: 0 !important;
 }
 
+/* Hide tour button during loading screen */
+#loading-screen ~ .start-tour-btn,
+body:has(#loading-screen) .start-tour-btn {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
 .start-tour-btn:hover {
   background: #1565c0;
   transform: translateY(-1px);

@@ -21,6 +21,14 @@
   visibility: visible !important;
 }
 
+/* Hide music button during loading screen */
+#loading-screen ~ .music-control-btn,
+body:has(#loading-screen) .music-control-btn {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
 .music-control-btn:hover {
   transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(33, 150, 243, 0.6);

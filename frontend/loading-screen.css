@@ -13,6 +13,26 @@
   transition: opacity 0.5s ease-out;
 }
 
+/* Hide tour and music buttons during loading screen */
+#loading-screen ~ * .start-tour-btn,
+#loading-screen ~ * .music-control-btn,
+body:has(#loading-screen) .start-tour-btn,
+body:has(#loading-screen) .music-control-btn {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Alternative: Hide buttons when loading screen exists */
+#loading-screen ~ #startTourBtn,
+#loading-screen ~ #music-control,
+body:has(#loading-screen) #startTourBtn,
+body:has(#loading-screen) #music-control {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
 .loader-content {
   text-align: center;
   position: relative;

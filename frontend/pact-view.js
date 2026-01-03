@@ -1010,12 +1010,12 @@ titleEl.innerText = String(p.name || "").trim() ? p.name : `Pact #${p.id}`;
 // Replaced pact dropdown (ONLY here — no duplicate string injection)
 // --------------------
 if (replacedDetails && replacedBody) {
-  if (data.replaced_pact) {
-    replacedDetails.style.display = "block";
-    const rp = data.replaced_pact;
-    replacedBody.innerHTML = `
-      <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
-        <div><strong>Name:</strong> ${rp.name || "Untitled Pact"}</div>
+if (data.replaced_pact) {
+  replacedDetails.style.display = "block";
+  const rp = data.replaced_pact;
+  replacedBody.innerHTML = `
+    <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
+      <div><strong>Name:</strong> ${rp.name || "Untitled Pact"}</div>
         <div><strong>Status:</strong> ${prettyStatus(rp.status)}</div>
         <div><strong>Sponsor:</strong> ${rp.sponsor_address}${
       normAddr(rp.sponsor_address) === normAddr(address)
@@ -1027,25 +1027,25 @@ if (replacedDetails && replacedBody) {
         ? ' <span style="color: #1976D2; font-weight: 600;">(You)</span>'
         : ""
     }</div>
-        <div><strong>Duration:</strong> ${formatDuration(
-          rp.duration_seconds
-        )}</div>
-        ${renderPayments(
-          "Progress Pay",
-          !!rp.progress_enabled,
-          rp.progress_milestones,
-          true
-        )}
-        ${renderPayments(
-          "All-or-Nothing Pay",
-          !!rp.aon_enabled,
-          rp.aon_rewards,
-          false
-        )}
-      </div>
-    `;
-  } else {
-    replacedDetails.style.display = "none";
+      <div><strong>Duration:</strong> ${formatDuration(
+        rp.duration_seconds
+      )}</div>
+      ${renderPayments(
+        "Progress Pay",
+        !!rp.progress_enabled,
+        rp.progress_milestones,
+        true
+      )}
+      ${renderPayments(
+        "All-or-Nothing Pay",
+        !!rp.aon_enabled,
+        rp.aon_rewards,
+        false
+      )}
+    </div>
+  `;
+} else {
+  replacedDetails.style.display = "none";
   }
 }
 
@@ -1141,8 +1141,9 @@ if (isActivePact(p)) {
   refreshBtn.id = "ap-refresh";
   refreshBtn.type = "button";
   refreshBtn.innerText = "Refresh";
-  refreshBtn.style.display = "block";
-  refreshBtn.style.marginBottom = "2px";
+  refreshBtn.style.display = "inline-block";
+  refreshBtn.style.marginTop = "10px";
+  refreshBtn.style.marginRight = "10px";
 
   const errEl = document.createElement("div");
   errEl.id = "ap-error";
@@ -1153,8 +1154,9 @@ if (isActivePact(p)) {
   const claimBtn = document.createElement("button");
   claimBtn.type = "button";
   claimBtn.innerText = "Claim";
-  claimBtn.style.display = "block";
-  claimBtn.style.marginTop = "8px";
+  claimBtn.style.display = "inline-block";
+  claimBtn.style.marginTop = "10px";
+  claimBtn.style.marginRight = "10px";
   claimBtn.style.background = "#1f7a1f";
   claimBtn.style.color = "white";
   claimBtn.style.padding = "8px 14px";
@@ -1439,6 +1441,9 @@ if (isActivePact(p)) {
       }
 
       claimBtn.disabled = true;
+      
+      // Show loading screen
+      showSecondaryLoadingScreen("Claiming MNEE... This may take a moment.");
 
       // Get backend payout signature (TOTAL earned, not delta)
       const payoutUrl = withEnv(
@@ -1477,11 +1482,17 @@ if (isActivePact(p)) {
       await tx.wait();
 
       document.getElementById("ap-available").innerText = "0.00";
+      
+      // Hide loading screen before alert
+      hideSecondaryLoadingScreen();
+      
       alert("✅ Claimed successfully!");
 
       // refresh pact cache
       p = await fetchLatestPact(pactIdStr);
     } catch (e) {
+      // Hide loading screen on error
+      hideSecondaryLoadingScreen();
       alert(`Claim failed:\n\n${e?.shortMessage || e?.message || e}`);
     } finally {
       claimBtn.disabled = false;
@@ -1498,8 +1509,9 @@ if (isActivePact(p)) {
     archiveBtn.id = "ap-archive";
     archiveBtn.type = "button";
     archiveBtn.innerText = "Archive";
-    archiveBtn.style.display = "block";
-    archiveBtn.style.marginTop = "12px";
+    archiveBtn.style.display = "inline-block";
+    archiveBtn.style.marginTop = "10px";
+    archiveBtn.style.marginRight = "10px";
     archiveBtn.style.background = "#546E7A";
     archiveBtn.style.color = "white";
     archiveBtn.style.padding = "8px 14px";
@@ -1610,8 +1622,8 @@ if (canInputVideoLink) {
         `${API_BASE}/api/pacts/${encodeURIComponent(pactIdStr)}/video-link`
       );
       const r = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           address,
           videoLink: trimmed,
@@ -1966,8 +1978,8 @@ if (canAccept) {
         `${API_BASE}/api/pacts/${encodeURIComponent(pactIdStr)}/accept`
       );
       const r = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           address,
           signature: sigResult.signature,
@@ -2002,9 +2014,9 @@ if (canAccept) {
 // --------------------
 let actionLabel = null;
 if (String(p.status) !== "active") {
-  if (mode === "sent") actionLabel = "Delete";
-  if (mode === "awaiting") actionLabel = "Reject";
-  if (mode === "created") actionLabel = "Delete";
+if (mode === "sent") actionLabel = "Delete";
+if (mode === "awaiting") actionLabel = "Reject";
+if (mode === "created") actionLabel = "Delete";
 }
 
 if (actionLabel) {

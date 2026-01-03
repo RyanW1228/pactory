@@ -1,9 +1,22 @@
 // Background music player with playlist support
-let backgroundMusic = null;
-let isMusicEnabled = false;
-let musicInitialized = false;
-let pendingUserGesturePlay = false;
-let currentTrackIndex = 0;
+// Use global window object to persist audio across page loads
+if (!window.pactoryMusic) {
+  window.pactoryMusic = {
+    audio: null,
+    isEnabled: false,
+    initialized: false,
+    pendingUserGesturePlay: false,
+    currentTrackIndex: 0,
+    preloadedTracks: []
+  };
+}
+
+let backgroundMusic = window.pactoryMusic.audio;
+let isMusicEnabled = window.pactoryMusic.isEnabled;
+let musicInitialized = window.pactoryMusic.initialized;
+let pendingUserGesturePlay = window.pactoryMusic.pendingUserGesturePlay;
+let currentTrackIndex = window.pactoryMusic.currentTrackIndex;
+let preloadedTracks = window.pactoryMusic.preloadedTracks;
 
 // Playlist - tracks will play in order and loop
 const playlist = [
@@ -12,11 +25,20 @@ const playlist = [
   "./assets/music/18. The Flower Garden.mp3"
 ];
 
-// Preload all tracks to prevent buffering
-const preloadedTracks = [];
+// Preload all tracks to prevent buffering (use global if available)
+if (!preloadedTracks || preloadedTracks.length === 0) {
+  preloadedTracks = [];
+  window.pactoryMusic.preloadedTracks = preloadedTracks;
+}
 
 // Save playback state before page unload
 window.addEventListener("beforeunload", () => {
+  // Sync state to global
+  window.pactoryMusic.audio = backgroundMusic;
+  window.pactoryMusic.isEnabled = isMusicEnabled;
+  window.pactoryMusic.currentTrackIndex = currentTrackIndex;
+  window.pactoryMusic.pendingUserGesturePlay = pendingUserGesturePlay;
+  
   if (backgroundMusic && !backgroundMusic.paused) {
     localStorage.setItem(
       "pactory-music-time",
@@ -29,11 +51,20 @@ window.addEventListener("beforeunload", () => {
 
 // Preload tracks to prevent buffering
 function preloadTracks() {
+  // Only preload if not already done
+  if (preloadedTracks.length > 0 && preloadedTracks.every(track => track)) {
+    console.log("🎵 Tracks already preloaded");
+    return;
+  }
+  
   playlist.forEach((src, index) => {
+    if (preloadedTracks[index]) return; // Already preloaded
+    
     const audio = new Audio();
     audio.preload = "auto";
     audio.src = src;
     preloadedTracks[index] = audio;
+    window.pactoryMusic.preloadedTracks[index] = audio;
     
     // Preload the audio - start loading immediately
     audio.load();
@@ -46,8 +77,20 @@ function preloadTracks() {
 }
 
 export function initMusic() {
+  // Sync state from global
+  backgroundMusic = window.pactoryMusic.audio;
+  isMusicEnabled = window.pactoryMusic.isEnabled;
+  musicInitialized = window.pactoryMusic.initialized;
+  pendingUserGesturePlay = window.pactoryMusic.pendingUserGesturePlay;
+  currentTrackIndex = window.pactoryMusic.currentTrackIndex;
+  preloadedTracks = window.pactoryMusic.preloadedTracks;
+  
   // Only initialize once globally (not per page) - reuse existing audio if available
   if (musicInitialized && backgroundMusic) {
+    // Sync state
+    isMusicEnabled = !backgroundMusic.paused;
+    window.pactoryMusic.isEnabled = isMusicEnabled;
+    
     // Just update the button state if music should be playing
     const musicPreference = localStorage.getItem("pactory-music-enabled");
     if (
@@ -66,13 +109,17 @@ export function initMusic() {
   }
 
   musicInitialized = true;
+  window.pactoryMusic.initialized = true;
 
   // Preload all tracks
   preloadTracks();
 
-  // Create audio element
-  backgroundMusic = new Audio();
-  backgroundMusic.preload = "auto";
+  // Create audio element (reuse if exists)
+  if (!backgroundMusic) {
+    backgroundMusic = new Audio();
+    backgroundMusic.preload = "auto";
+    window.pactoryMusic.audio = backgroundMusic;
+  }
 
   // Restore track index and position
   const savedTrackIndex = localStorage.getItem("pactory-music-track");
@@ -170,6 +217,7 @@ function loadTrack(index) {
   }
   
   currentTrackIndex = index;
+  window.pactoryMusic.currentTrackIndex = currentTrackIndex;
   
   // Use preloaded track if available to prevent buffering
   if (preloadedTracks[index] && preloadedTracks[index].readyState >= 2) {
@@ -275,9 +323,11 @@ function enableMusic() {
   // If already playing, just reflect state
   if (!backgroundMusic.paused) {
     isMusicEnabled = true;
+    window.pactoryMusic.isEnabled = true;
     localStorage.setItem("pactory-music-enabled", "true");
     updateButtonState(true);
     pendingUserGesturePlay = false;
+    window.pactoryMusic.pendingUserGesturePlay = false;
     return;
   }
 
@@ -305,7 +355,9 @@ function handlePlayPromise(playPromise) {
       .then(() => {
         console.log(`🎵 Track ${currentTrackIndex + 1} is playing`);
         isMusicEnabled = true;
+        window.pactoryMusic.isEnabled = true;
         pendingUserGesturePlay = false;
+        window.pactoryMusic.pendingUserGesturePlay = false;
         localStorage.setItem("pactory-music-enabled", "true");
         updateButtonState(true);
       })
@@ -344,6 +396,7 @@ function disableMusic() {
 
   backgroundMusic.pause();
   isMusicEnabled = false;
+  window.pactoryMusic.isEnabled = false;
   localStorage.setItem("pactory-music-enabled", "false");
   localStorage.removeItem("pactory-music-time"); // Clear saved time when manually stopped
   updateButtonState(false);

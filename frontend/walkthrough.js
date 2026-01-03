@@ -47,6 +47,28 @@ const homepageSteps = [
     position: "top",
   },
   {
+    id: "address-names",
+    title: "Manage Address Names",
+    content:
+      "Add friendly names to wallet addresses to make them easier to identify. These names will appear throughout the app when viewing pacts.",
+    element: "#addressNameInput",
+    position: "bottom",
+    conditional: () => {
+      return document.getElementById("addressNameInput") !== null;
+    },
+  },
+  {
+    id: "allowlist",
+    title: "Manage Allowlist",
+    content:
+      "Enable the allowlist to restrict pact creation to specific addresses. When enabled, you can only create pacts with addresses on your allowlist. By default, all addresses are allowed. Toggle it on to add addresses to your allowlist.",
+    element: "#allowlistToggle",
+    position: "bottom",
+    conditional: () => {
+      return document.getElementById("allowlistToggle") !== null;
+    },
+  },
+  {
     id: "actions",
     title: "Main Actions",
     content:
@@ -101,10 +123,22 @@ const dashboardSteps = [
     position: "top",
   },
   {
+    id: "archive-section",
+    title: "Archive Section",
+    content:
+      "Completed or replaced pacts appear in the Archive section. You can view archived pacts or delete them permanently using the Delete button. Archived pacts are those that have been replaced or completed.",
+    element: "#list-archive",
+    position: "top",
+    conditional: () => {
+      const archiveList = document.getElementById("list-archive");
+      return archiveList && archiveList.parentElement;
+    },
+  },
+  {
     id: "dashboard-complete",
     title: "Dashboard Tour Complete!",
     content:
-      "You're ready to manage your pacts! Try creating a new pact or exploring your existing ones.",
+      "You're ready to manage your pacts! Try creating a new pact or exploring your existing ones. Don't forget to archive completed pacts to keep your dashboard organized!",
     element: null,
     position: "center",
     showFinishButton: true,
@@ -142,7 +176,7 @@ const pactorySteps = [
     id: "counterparty",
     title: "Counterparty Address",
     content:
-      "Enter the wallet address of the other party (Creator if you're Sponsor, or Sponsor if you're Creator).",
+      "Enter the wallet address of the other party (Creator if you're Sponsor, or Sponsor if you're Creator).\n\nIf you have the allowlist enabled on the homepage, only allowlisted addresses will be accepted here. Address names you've saved will also appear here.",
     element: "#counterpartyInput",
     position: "bottom",
   },
@@ -220,15 +254,23 @@ const pactViewSteps = [
     id: "actions",
     title: "Available Actions",
     content:
-      "Depending on your role and the pact status, you may see different action buttons:\n\n• Input Video Link (Creator): Add the video URL\n• Approve and Fund (Sponsor): Lock funds to activate the pact\n• Negotiate: Propose changes to the pact\n• Accept/Reject: Review and respond to pact proposals\n• Refresh Views: Update view counts from the video platform\n• Claim: Withdraw unlocked earnings to your wallet",
+      "Depending on your role and the pact status, you may see different action buttons:\n\n• Input Video Link (Creator): Add the video URL\n• Approve and Fund (Sponsor): Lock funds to activate the pact\n• Negotiate: Propose changes to the pact\n• Accept/Reject: Review and respond to pact proposals\n• Refresh Views: Update view counts from the video platform\n• Claim: Withdraw unlocked earnings to your wallet\n• Archive: Move completed pacts to the Archive section (appears when pact duration ends and all MNEE is claimed/refunded)",
     element: "#content",
+    position: "right",
+  },
+  {
+    id: "payout-graph",
+    title: "Payout Visualization",
+    content:
+      "View the payout graph in a dropdown to see how earnings are calculated based on view milestones. This graph shows the total payout structure for this specific pact.",
+    element: "details.payout-graph-details",
     position: "right",
   },
   {
     id: "pact-view-complete",
     title: "You're All Set!",
     content:
-      "You now understand how to view and interact with pacts. Use the available actions based on your role and the pact status.",
+      "You now understand how to view and interact with pacts. Use the available actions based on your role and the pact status. Remember to archive completed pacts to keep your dashboard organized!",
     element: "#content",
     position: "right",
     showFinishButton: true,

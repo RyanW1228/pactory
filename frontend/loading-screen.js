@@ -37,6 +37,20 @@ export function initLoadingScreen() {
   const insertLoader = () => {
     if (!document.body) return;
 
+    // Hide tour and music buttons
+    const tourBtn = document.getElementById("startTourBtn");
+    const musicBtn = document.getElementById("music-control");
+    if (tourBtn) {
+      tourBtn.style.display = "none";
+      tourBtn.style.visibility = "hidden";
+      tourBtn.style.opacity = "0";
+    }
+    if (musicBtn) {
+      musicBtn.style.display = "none";
+      musicBtn.style.visibility = "hidden";
+      musicBtn.style.opacity = "0";
+    }
+
     document.body.insertBefore(loader, document.body.firstChild);
 
     // Mark as visited ONLY after showing
@@ -48,6 +62,18 @@ export function initLoadingScreen() {
 
       setTimeout(() => {
         loader.remove();
+
+        // Show tour and music buttons again
+        if (tourBtn) {
+          tourBtn.style.display = "";
+          tourBtn.style.visibility = "";
+          tourBtn.style.opacity = "";
+        }
+        if (musicBtn) {
+          musicBtn.style.display = "";
+          musicBtn.style.visibility = "";
+          musicBtn.style.opacity = "";
+        }
 
         // NOW reveal the UI
         const app = document.querySelector(".container");
@@ -200,6 +226,20 @@ export function initSecondaryLoadingScreen() {
 
 // Show secondary loading screen programmatically (for async operations)
 export function showSecondaryLoadingScreen(customMessage = null) {
+  // Hide tour and music buttons
+  const tourBtn = document.getElementById("startTourBtn");
+  const musicBtn = document.getElementById("music-control");
+  if (tourBtn) {
+    tourBtn.style.display = "none";
+    tourBtn.style.visibility = "hidden";
+    tourBtn.style.opacity = "0";
+  }
+  if (musicBtn) {
+    musicBtn.style.display = "none";
+    musicBtn.style.visibility = "hidden";
+    musicBtn.style.opacity = "0";
+  }
+
   // Check if already exists - if so, update message if provided
   let secondaryLoader = document.getElementById("secondary-loading-screen");
   
@@ -270,6 +310,20 @@ export function hideSecondaryLoadingScreen() {
     setTimeout(() => {
       if (loader.parentElement) {
         loader.remove();
+      }
+      
+      // Show tour and music buttons again
+      const tourBtn = document.getElementById("startTourBtn");
+      const musicBtn = document.getElementById("music-control");
+      if (tourBtn) {
+        tourBtn.style.display = "";
+        tourBtn.style.visibility = "";
+        tourBtn.style.opacity = "";
+      }
+      if (musicBtn) {
+        musicBtn.style.display = "";
+        musicBtn.style.visibility = "";
+        musicBtn.style.opacity = "";
       }
       // Reveal content
       const containers = document.querySelectorAll(".container");
