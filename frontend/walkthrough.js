@@ -112,13 +112,13 @@ const dashboardSteps = [
     content:
       "Click here to propose a new pact. You'll set up payment milestones, duration, and terms.",
     element: "#proposePactButton",
-    position: "top",
+    position: "bottom",
   },
   {
     id: "pact-sections",
     title: "Pact Categories",
     content:
-      "Your pacts are organized into sections like Active, Awaiting Review, and Archive. Each section shows pacts in different stages.",
+      "Your pacts are organized into sections like Active, Awaiting Review, Completed. Each section shows pacts in different stages.",
     element: "#sectionsContainer",
     position: "top",
   },
@@ -215,7 +215,7 @@ const pactViewSteps = [
     content:
       "This page shows all the details of your pact. Let's explore the key information and actions available!",
     element: "#title",
-    position: "right",
+    position: "bottom",
     showStartButton: true,
   },
   {
@@ -251,10 +251,18 @@ const pactViewSteps = [
     position: "right",
   },
   {
-    id: "actions",
-    title: "Available Actions",
+    id: "actions-basic",
+    title: "Basic Actions",
     content:
-      "Depending on your role and the pact status, you may see different action buttons:\n\n• Input Video Link (Creator): Add the video URL\n• Approve and Fund (Sponsor): Lock funds to activate the pact\n• Negotiate: Propose changes to the pact\n• Accept/Reject: Review and respond to pact proposals\n• Refresh Views: Update view counts from the video platform\n• Claim: Withdraw unlocked earnings to your wallet\n• Archive: Move completed pacts to the Archive section (appears when pact duration ends and all MNEE is claimed/refunded)",
+      "Depending on your role and the pact status, you may see different action buttons:\n\n• Input Video Link (Creator): Add the video URL\n• Approve and Fund (Sponsor): Lock funds to activate the pact\n• Negotiate: Propose changes to the pact\n• Accept/Reject: Review and respond to pact proposals",
+    element: "#content",
+    position: "right",
+  },
+  {
+    id: "actions-advanced",
+    title: "Additional Actions",
+    content:
+      "More actions available during the pact lifecycle:\n\n• Refresh Views: Update view counts from the video platform\n• Claim: Withdraw unlocked earnings to your wallet\n• Archive: Move completed pacts to the Archive section (appears when pact duration ends and all MNEE is claimed/refunded)",
     element: "#content",
     position: "right",
   },
@@ -322,6 +330,7 @@ function createTooltip() {
   tooltip.style.top = "-9999px";
   tooltip.style.left = "-9999px";
   tooltip.style.transform = "translate(0,0)";
+  tooltip.style.visibility = "hidden"; // Ensure it's truly hidden initially
 
   document.body.appendChild(tooltip);
   return tooltip;
@@ -453,6 +462,7 @@ function positionTooltip(step, element) {
   tooltip.style.top = "-9999px";
   tooltip.style.left = "-9999px";
   tooltip.style.transform = "translate(0,0)";
+  tooltip.style.visibility = "hidden"; // Ensure it's truly hidden during measurement
 
   // ✅ force styles to apply NOW (kills the "first wrong frame")
   void tooltip.offsetHeight;
@@ -465,10 +475,14 @@ function positionTooltip(step, element) {
 
     // ✅ force final position to apply, then reveal next frame
     void tooltip.offsetHeight;
+    // Use double requestAnimationFrame for smoother reveal
     requestAnimationFrame(() => {
-      if (!tooltip) return;
-      tooltip.classList.remove("wt-hidden");
-      tooltip.classList.remove("wt-positioning");
+      requestAnimationFrame(() => {
+        if (!tooltip) return;
+        tooltip.style.visibility = "visible";
+        tooltip.classList.remove("wt-hidden");
+        tooltip.classList.remove("wt-positioning");
+      });
     });
     return;
   }
@@ -484,38 +498,74 @@ function positionTooltip(step, element) {
   let top,
     left,
     arrowClass = "";
+  let actualPosition = step.position; // Track if we flip the position
 
-  // IMPORTANT: set transform for the chosen orientation BEFORE measuring
-  switch (step.position) {
-    case "top":
-      top = rect.top - spacing;
-      left = rect.left + rect.width / 2;
-      tooltip.style.transform = "translate(-50%, -100%)";
-      arrowClass = "tooltip-bottom";
-      break;
-    case "bottom":
-      top = rect.bottom + spacing;
-      left = rect.left + rect.width / 2;
-      tooltip.style.transform = "translate(-50%, 0)";
-      arrowClass = "tooltip-top";
-      break;
-    case "left":
-      top = rect.top + rect.height / 2;
-      left = rect.left - spacing;
-      tooltip.style.transform = "translate(-100%, -50%)";
-      arrowClass = "tooltip-right";
-      break;
-    case "right":
+  // For right-positioned tooltips, check if they would go off-screen
+  // If so, position them better to stay on screen
+  if (step.position === "right") {
+    const viewportPadding = Math.max(20, window.innerWidth * 0.05);
+    // Rough estimate of tooltip width (will measure properly later)
+    const estimatedTooltipWidth = 350; // Approximate width
+    const estimatedLeft = rect.right + spacing;
+    
+    // If tooltip would go off-screen, position it better
+    if (estimatedLeft + estimatedTooltipWidth > window.innerWidth - viewportPadding) {
+      // Check if there's more space on the left side
+      const spaceOnRight = window.innerWidth - rect.right - viewportPadding;
+      const spaceOnLeft = rect.left - viewportPadding;
+      
+      if (spaceOnLeft > spaceOnRight && spaceOnLeft > estimatedTooltipWidth) {
+        // More space on left, flip to left side
+        top = rect.top + rect.height / 2;
+        left = rect.left - spacing;
+        tooltip.style.transform = "translate(-100%, -50%)";
+        arrowClass = "tooltip-right";
+        actualPosition = "left"; // Track that we flipped
+      } else {
+        // Keep on right but position it to fit on screen
+        // Position it so it's centered in the available space on the right
+        top = rect.top + rect.height / 2;
+        left = Math.max(
+          viewportPadding,
+          window.innerWidth - estimatedTooltipWidth - viewportPadding
+        );
+        tooltip.style.transform = "translate(0, -50%)";
+        arrowClass = "tooltip-left";
+      }
+    } else {
+      // Normal right positioning
       top = rect.top + rect.height / 2;
       left = rect.right + spacing;
       tooltip.style.transform = "translate(0, -50%)";
       arrowClass = "tooltip-left";
-      break;
-    default:
-      top = rect.bottom + spacing;
-      left = rect.left + rect.width / 2;
-      tooltip.style.transform = "translate(-50%, 0)";
-      arrowClass = "tooltip-top";
+    }
+  } else {
+    // IMPORTANT: set transform for the chosen orientation BEFORE measuring
+    switch (step.position) {
+      case "top":
+        top = rect.top - spacing;
+        left = rect.left + rect.width / 2;
+        tooltip.style.transform = "translate(-50%, -100%)";
+        arrowClass = "tooltip-bottom";
+        break;
+      case "bottom":
+        top = rect.bottom + spacing;
+        left = rect.left + rect.width / 2;
+        tooltip.style.transform = "translate(-50%, 0)";
+        arrowClass = "tooltip-top";
+        break;
+      case "left":
+        top = rect.top + rect.height / 2;
+        left = rect.left - spacing;
+        tooltip.style.transform = "translate(-100%, -50%)";
+        arrowClass = "tooltip-right";
+        break;
+      default:
+        top = rect.bottom + spacing;
+        left = rect.left + rect.width / 2;
+        tooltip.style.transform = "translate(-50%, 0)";
+        arrowClass = "tooltip-top";
+    }
   }
 
   // Place once, measure, then clamp
@@ -525,27 +575,77 @@ function positionTooltip(step, element) {
   void tooltip.offsetHeight; // ✅ ensure DOM updates
   const tooltipRect = tooltip.getBoundingClientRect();
 
-  // Better vertical centering for left/right
-  if (step.position === "left" || step.position === "right") {
-    top = rect.top + rect.height / 2 - tooltipRect.height / 2;
-  }
-
   const viewportPadding = Math.max(20, window.innerWidth * 0.05);
+  const viewportPaddingVertical = Math.max(20, window.innerHeight * 0.05);
   const originalLeft = left;
   const originalTop = top;
 
+  // Better vertical centering for left/right tooltips
+  if (actualPosition === "left" || actualPosition === "right" || step.position === "left" || step.position === "right") {
+    // Calculate ideal centered position
+    const idealTop = rect.top + rect.height / 2 - tooltipRect.height / 2;
+    
+    // Check if tooltip would go off the top
+    if (idealTop < viewportPaddingVertical) {
+      // Position tooltip below the element's top, ensuring it stays on screen
+      top = Math.max(viewportPaddingVertical, rect.top);
+    } 
+    // Check if tooltip would go off the bottom
+    else if (idealTop + tooltipRect.height > window.innerHeight - viewportPaddingVertical) {
+      // Position tooltip above the element's bottom, ensuring it stays on screen
+      top = Math.min(
+        window.innerHeight - tooltipRect.height - viewportPaddingVertical,
+        rect.bottom - tooltipRect.height
+      );
+    } 
+    else {
+      // Tooltip fits, use centered position
+      top = idealTop;
+    }
+  }
+
+  // For right-positioned tooltips that are still off-screen, center them better
+  if (step.position === "right" && left + tooltipRect.width > window.innerWidth - viewportPadding) {
+    // Center the tooltip horizontally on the screen, but keep it on the right side of the element
+    // Position it so it's fully visible but still associated with the element
+    const availableSpace = window.innerWidth - viewportPadding * 2;
+    if (tooltipRect.width < availableSpace) {
+      // Center it in the available space, but keep it to the right of the element if possible
+      left = Math.max(
+        viewportPadding,
+        Math.min(
+          window.innerWidth - tooltipRect.width - viewportPadding,
+          rect.right + spacing
+        )
+      );
+    } else {
+      // Tooltip is too wide, just ensure it's fully visible
+      left = viewportPadding;
+    }
+  }
+
+  // Final horizontal clamping
   if (left < viewportPadding) left = viewportPadding;
   if (left + tooltipRect.width > window.innerWidth - viewportPadding) {
     left = window.innerWidth - tooltipRect.width - viewportPadding;
   }
-  if (top < viewportPadding) top = viewportPadding;
-  if (top + tooltipRect.height > window.innerHeight - viewportPadding) {
-    top = window.innerHeight - tooltipRect.height - viewportPadding;
+  
+  // Final vertical clamping - ensure tooltip is always fully visible
+  if (top < viewportPaddingVertical) {
+    top = viewportPaddingVertical;
+  }
+  if (top + tooltipRect.height > window.innerHeight - viewportPaddingVertical) {
+    top = window.innerHeight - tooltipRect.height - viewportPaddingVertical;
+  }
+  
+  // If tooltip is still too tall for viewport, at least keep it visible
+  if (tooltipRect.height > window.innerHeight - viewportPaddingVertical * 2) {
+    top = viewportPaddingVertical;
   }
 
   // If we moved a lot, remove arrow
   if (
-    (step.position === "left" || step.position === "right") &&
+    (actualPosition === "left" || actualPosition === "right" || step.position === "left" || step.position === "right") &&
     Math.abs(left - originalLeft) > 50
   ) {
     arrowClass = "";
@@ -568,12 +668,16 @@ function positionTooltip(step, element) {
   tooltip.style.top = `${top}px`;
   tooltip.style.left = `${left}px`;
 
-  // ✅ lock in final placement, then reveal
+  // ✅ lock in final placement, then reveal smoothly
   void tooltip.offsetHeight;
+  // Use double requestAnimationFrame for smoother reveal (ensures browser has painted)
   requestAnimationFrame(() => {
-    if (!tooltip) return;
-    tooltip.classList.remove("wt-hidden");
-    tooltip.classList.remove("wt-positioning");
+    requestAnimationFrame(() => {
+      if (!tooltip) return;
+      tooltip.style.visibility = "visible";
+      tooltip.classList.remove("wt-hidden");
+      tooltip.classList.remove("wt-positioning");
+    });
   });
 }
 
@@ -973,8 +1077,14 @@ export function walkthroughNext() {
 }
 
 export function walkthroughPrev() {
+  // Prevent multiple rapid clicks that cause lag
+  if (!isActive) return;
+  
   if (currentStep > 0) {
-    showStep(currentStep - 1);
+    // Small delay to prevent lag/shaking (same as walkthroughNext)
+    setTimeout(() => {
+      showStep(currentStep - 1);
+    }, 100);
   }
 }
 

@@ -16,6 +16,13 @@ export function initLoadingScreen() {
   // --- CREATE LOADER ---
   const loader = document.createElement("div");
   loader.id = "loading-screen";
+  loader.style.position = "fixed";
+  loader.style.top = "0";
+  loader.style.left = "0";
+  loader.style.width = "100%";
+  loader.style.height = "100%";
+  loader.style.zIndex = "99999";
+  loader.style.background = "linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%, #90CAF9 100%)";
   loader.innerHTML = `
     <div class="loader-content">
       <div class="penguin-container">
@@ -130,6 +137,20 @@ export function initSecondaryLoadingScreen() {
   const loadStartTime = Date.now();
   const MIN_DISPLAY_TIME = 1000; // 1 second minimum
 
+  // Hide tour and music buttons
+  const tourBtn = document.getElementById("startTourBtn");
+  const musicBtn = document.getElementById("music-control");
+  if (tourBtn) {
+    tourBtn.style.display = "none";
+    tourBtn.style.visibility = "hidden";
+    tourBtn.style.opacity = "0";
+  }
+  if (musicBtn) {
+    musicBtn.style.display = "none";
+    musicBtn.style.visibility = "hidden";
+    musicBtn.style.opacity = "0";
+  }
+
   // Create secondary loader
   const createLoader = () => {
     if (document.getElementById("secondary-loading-screen")) return;
@@ -203,11 +224,38 @@ export function initSecondaryLoadingScreen() {
           if (loader.parentElement) {
             loader.remove();
           }
+          
+          // Show tour and music buttons again
+          const tourBtn = document.getElementById("startTourBtn");
+          const musicBtn = document.getElementById("music-control");
+          if (tourBtn) {
+            tourBtn.style.display = "";
+            tourBtn.style.visibility = "";
+            tourBtn.style.opacity = "";
+          }
+          if (musicBtn) {
+            musicBtn.style.display = "";
+            musicBtn.style.visibility = "";
+            musicBtn.style.opacity = "";
+          }
+          
           // Reveal content
           showContent();
         }, 300);
       } else {
-        // If loader wasn't found, just reveal content
+        // If loader wasn't found, show buttons and reveal content
+        const tourBtn = document.getElementById("startTourBtn");
+        const musicBtn = document.getElementById("music-control");
+        if (tourBtn) {
+          tourBtn.style.display = "";
+          tourBtn.style.visibility = "";
+          tourBtn.style.opacity = "";
+        }
+        if (musicBtn) {
+          musicBtn.style.display = "";
+          musicBtn.style.visibility = "";
+          musicBtn.style.opacity = "";
+        }
         showContent();
       }
     }, remainingTime);
@@ -285,6 +333,17 @@ export function showSecondaryLoadingScreen(customMessage = null) {
   // Create loader
   secondaryLoader = document.createElement("div");
   secondaryLoader.id = "secondary-loading-screen";
+  // Ensure loader is on top of everything
+  secondaryLoader.style.position = "fixed";
+  secondaryLoader.style.top = "0";
+  secondaryLoader.style.left = "0";
+  secondaryLoader.style.width = "100%";
+  secondaryLoader.style.height = "100%";
+  secondaryLoader.style.zIndex = "99999";
+  secondaryLoader.style.background = "linear-gradient(135deg, #F0F7FF 0%, #E3F2FD 50%, #D1E7FF 100%)";
+  secondaryLoader.style.display = "flex";
+  secondaryLoader.style.justifyContent = "center";
+  secondaryLoader.style.alignItems = "center";
   secondaryLoader.innerHTML = `
     <div class="loader-content">
       <div class="penguin-container-secondary">

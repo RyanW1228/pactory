@@ -24,6 +24,7 @@
 /* Hide without layout/transition artifacts */
 .walkthrough-tooltip.wt-hidden {
   opacity: 0 !important;
+  visibility: hidden !important;
   pointer-events: none !important;
 }
 

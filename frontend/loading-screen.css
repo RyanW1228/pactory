@@ -9,7 +9,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 10000;
+  z-index: 99999 !important; /* Very high z-index to be above everything */
   transition: opacity 0.5s ease-out;
 }
 
@@ -17,20 +17,30 @@
 #loading-screen ~ * .start-tour-btn,
 #loading-screen ~ * .music-control-btn,
 body:has(#loading-screen) .start-tour-btn,
-body:has(#loading-screen) .music-control-btn {
+body:has(#loading-screen) .music-control-btn,
+#secondary-loading-screen ~ * .start-tour-btn,
+#secondary-loading-screen ~ * .music-control-btn,
+body:has(#secondary-loading-screen) .start-tour-btn,
+body:has(#secondary-loading-screen) .music-control-btn {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Alternative: Hide buttons when loading screen exists */
 #loading-screen ~ #startTourBtn,
 #loading-screen ~ #music-control,
 body:has(#loading-screen) #startTourBtn,
-body:has(#loading-screen) #music-control {
+body:has(#loading-screen) #music-control,
+#secondary-loading-screen ~ #startTourBtn,
+#secondary-loading-screen ~ #music-control,
+body:has(#secondary-loading-screen) #startTourBtn,
+body:has(#secondary-loading-screen) #music-control {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .loader-content {
@@ -306,7 +316,7 @@ body::after {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 9999;
+  z-index: 99999 !important; /* Very high z-index to be above everything */
   transition: opacity 0.3s ease-out;
   opacity: 1;
 }
