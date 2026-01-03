@@ -520,7 +520,10 @@ function renderActivePanelSkeleton() {
     <div style="margin-top:10px;"><strong>Video link:</strong> <span id="ap-link">-</span></div>
     <div><strong>Views:</strong> <span id="ap-views">-</span></div>
 
-    <div style="margin-top:10px;"><strong>Earned (unlocked):</strong> <span id="ap-earned">-</span></div>
+<div style="display:flex; align-items:center; gap:6px;">
+  <strong>Earned (unlocked):</strong>
+  <span id="ap-earned">-</span>
+</div>
     <div><strong>Unearned:</strong> <span id="ap-unearned">-</span></div>
     <div><strong>Available to Claim:</strong> <span id="ap-available">-</span></div>
   `;
@@ -555,7 +558,9 @@ function renderActiveFromCache(p) {
     ? unearned.toFixed(2)
     : "0.00";
 
-  const available = Number(p.cached_available ?? earned);
+  const paidOut = Number(p.cached_paid_out ?? 0);
+  const available = Math.max(0, earned - paidOut);
+
   document.getElementById("ap-available").innerText = Number.isFinite(available)
     ? available.toFixed(2)
     : "0.00";
@@ -1479,6 +1484,15 @@ if (isActivePact(p)) {
       document.getElementById("ap-available").innerText = "0.00";
       alert("✅ Claimed successfully!");
 
+      // immediately reflect claim in UI
+      document.getElementById("ap-available").innerText = "0.00";
+
+      // refetch pact cache (paidOut is now updated on-chain)
+      p = await fetchLatestPact(pactIdStr);
+
+      // keep UI consistent
+      p.cached_available = 0;
+
       // refresh pact cache
       p = await fetchLatestPact(pactIdStr);
     } catch (e) {
@@ -1487,76 +1501,6 @@ if (isActivePact(p)) {
       claimBtn.disabled = false;
     }
   };
-
-  // Archive button (only once, only if completed)
-  setTimeout(async () => {
-    const completed = await isPactCompleted(p);
-    if (!completed) return;
-    if (document.getElementById("ap-archive")) return;
-
-    const archiveBtn = document.createElement("button");
-    archiveBtn.id = "ap-archive";
-    archiveBtn.type = "button";
-    archiveBtn.innerText = "Archive";
-    archiveBtn.style.display = "block";
-    archiveBtn.style.marginTop = "12px";
-    archiveBtn.style.background = "#546E7A";
-    archiveBtn.style.color = "white";
-    archiveBtn.style.padding = "8px 14px";
-    archiveBtn.style.borderRadius = "8px";
-    archiveBtn.style.border = "none";
-    archiveBtn.style.cursor = "pointer";
-
-    archiveBtn.onclick = async () => {
-      const ok = confirm(
-        "Archive this completed pact?\n\nThis will move it to the Archive section."
-      );
-      if (!ok) return;
-
-      const sigResult = await verifySignatureForAction("archive", pactIdStr);
-      if (!sigResult) return;
-
-      archiveBtn.disabled = true;
-      archiveBtn.style.opacity = "0.7";
-      archiveBtn.style.cursor = "not-allowed";
-
-      try {
-        const url = withEnv(
-          `${API_BASE}/api/pacts/${encodeURIComponent(
-            pactIdStr
-          )}/archive?address=${encodeURIComponent(address)}`
-        );
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            signature: sigResult.signature,
-            message: sigResult.message,
-          }),
-        });
-
-        const out = await resp.json().catch(() => ({}));
-        if (!resp.ok || !out.ok) {
-          alert(out?.error || "Failed to archive pact");
-          archiveBtn.disabled = false;
-          archiveBtn.style.opacity = "1";
-          archiveBtn.style.cursor = "pointer";
-          return;
-        }
-
-        alert("✅ Pact archived successfully!");
-        localStorage.setItem("pactsNeedsRefresh", "1");
-        window.location.assign("./pacts-dashboard.html");
-      } catch {
-        alert("Archive failed (backend not reachable).");
-        archiveBtn.disabled = false;
-        archiveBtn.style.opacity = "1";
-        archiveBtn.style.cursor = "pointer";
-      }
-    };
-
-    controls.appendChild(archiveBtn);
-  }, 800);
 }
 
 // --------------------

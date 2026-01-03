@@ -541,8 +541,10 @@ function renderAonPayEnabled() {
 }
 
 function updateDeleteAonRewardVisibility() {
-  deleteAonRewardButton.style.display =
-    aonRewards.length > 1 ? "inline-block" : "none";
+  const shouldShow =
+    aonPayEnabled.checked && !aonRewardsLocked && aonRewards.length > 1;
+
+  deleteAonRewardButton.style.display = shouldShow ? "inline-block" : "none";
 }
 
 function updateAonRewardControlsVisibility() {

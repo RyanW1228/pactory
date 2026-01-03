@@ -57,7 +57,7 @@ const SPONSOR_SECTIONS = [
   "Created — Waiting for Video Link",
   "Awaiting Your Review",
   "Sent for Review",
-  "Archive",
+  "Completed",
 ];
 
 const CREATOR_SECTIONS = [
@@ -66,7 +66,7 @@ const CREATOR_SECTIONS = [
   "Created — Requires Video Link",
   "Awaiting Your Review",
   "Sent for Review",
-  "Archive",
+  "Completed",
 ];
 
 // const pact = await escrow.pacts(pactId);
