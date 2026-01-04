@@ -42,9 +42,22 @@ const homepageSteps = [
     id: "environment",
     title: "Environment Settings",
     content:
-      "Switch between Testing and Production environments. In Testing mode, you can mint Mock MNEE tokens for testing.",
-    element: ".environment-section",
-    position: "top",
+      "Switch between Testing and Production environments using this toggle.",
+    element: "#environmentToggle",
+    position: "right",
+    
+  },
+  {
+    id: "mint-mock",
+    title: "Mint Mock MNEE",
+    content:
+      "In Testing mode, mint Mock MNEE tokens for development and testing.",
+    element: "#mintMockMNEEButton",
+    position: "right",
+    conditional: () => {
+      const btn = document.getElementById("mintMockMNEEButton");
+      return btn && btn.style.display !== "none";
+    },
   },
   {
     id: "address-names",
@@ -120,20 +133,9 @@ const dashboardSteps = [
     content:
       "Your pacts are organized into sections like Active, Awaiting Review, Completed. Each section shows pacts in different stages.",
     element: "#sectionsContainer",
-    position: "top",
+    position: "right",
   },
-  {
-    id: "archive-section",
-    title: "Archive Section",
-    content:
-      "Completed or replaced pacts appear in the Archive section. You can view archived pacts or delete them permanently using the Delete button. Archived pacts are those that have been replaced or completed.",
-    element: "#list-archive",
-    position: "top",
-    conditional: () => {
-      const archiveList = document.getElementById("list-archive");
-      return archiveList && archiveList.parentElement;
-    },
-  },
+  
   {
     id: "dashboard-complete",
     title: "Dashboard Tour Complete!",
@@ -278,7 +280,7 @@ const pactViewSteps = [
     id: "pact-view-complete",
     title: "You're All Set!",
     content:
-      "You now understand how to view and interact with pacts. Use the available actions based on your role and the pact status. Remember to archive completed pacts to keep your dashboard organized!",
+      "You now understand how to view and interact with pacts. Use the available actions based on your role and the pact status. You can also delete completed pacts to keep your dashboard organized!",
     element: "#content",
     position: "right",
     showFinishButton: true,
@@ -750,9 +752,25 @@ function showStep(stepIndex) {
     }
 
     if (element) {
-      // Always scroll element into center view, regardless of current visibility
+      // For hidden inputs (like checkboxes with opacity: 0), use parent or label for positioning
+      let targetElement = element;
+      const rect = element.getBoundingClientRect();
+      if ((rect.width === 0 || rect.height === 0) && element.tagName === "INPUT") {
+        // Try to find the label or parent container
+        const label = element.closest("label");
+        if (label) {
+          targetElement = label;
+        } else {
+          const parent = element.parentElement;
+          if (parent) {
+            targetElement = parent;
+          }
+        }
+      }
+      
+      // Always scroll target element into center view, regardless of current visibility
       // This ensures elements are visible even when zoomed in
-      element.scrollIntoView({
+      targetElement.scrollIntoView({
         behavior: "smooth",
         block: "center",
         inline: "center",
@@ -762,11 +780,11 @@ function showStep(stepIndex) {
       setTimeout(() => {
         if (!isActive) return; // Check if still active
 
-        const rect = element.getBoundingClientRect();
-        const computedStyle = window.getComputedStyle(element);
+        const targetRect = targetElement.getBoundingClientRect();
+        const computedStyle = window.getComputedStyle(targetElement);
         const isVisible =
-          rect.width > 0 &&
-          rect.height > 0 &&
+          targetRect.width > 0 &&
+          targetRect.height > 0 &&
           computedStyle.display !== "none" &&
           computedStyle.visibility !== "hidden";
 
@@ -774,8 +792,8 @@ function showStep(stepIndex) {
           // Calculate if element is truly centered
           const viewportCenterY = window.innerHeight / 2;
           const viewportCenterX = window.innerWidth / 2;
-          const elementCenterY = rect.top + rect.height / 2;
-          const elementCenterX = rect.left + rect.width / 2;
+          const elementCenterY = targetRect.top + targetRect.height / 2;
+          const elementCenterX = targetRect.left + targetRect.width / 2;
 
           // Calculate scroll adjustments needed to center
           const scrollY = elementCenterY - viewportCenterY;
@@ -793,24 +811,24 @@ function showStep(stepIndex) {
             // Wait a bit more for this adjustment
             setTimeout(() => {
               if (isActive) {
-                positionHighlight(element);
-                positionTooltip(step, element);
+                positionHighlight(targetElement);
+                positionTooltip(step, targetElement);
                 // Now disable scrolling after positioning
-                setupScrollPrevention(step, element);
+                setupScrollPrevention(step, targetElement);
               }
             }, 300);
           } else {
             // Element is well-centered, position immediately
-            positionHighlight(element);
-            positionTooltip(step, element);
+            positionHighlight(targetElement);
+            positionTooltip(step, targetElement);
             // Now disable scrolling after positioning
-            setupScrollPrevention(step, element);
+            setupScrollPrevention(step, targetElement);
           }
         } else {
           // Element not visible, try positioning anyway
-          positionHighlight(element);
-          positionTooltip(step, element);
-          setupScrollPrevention(step, element);
+          positionHighlight(targetElement);
+          positionTooltip(step, targetElement);
+          setupScrollPrevention(step, targetElement);
         }
       }, 400); // Increased timeout to allow scroll to complete
     } else {
@@ -1066,10 +1084,32 @@ export function walkthroughNext() {
   // Prevent multiple rapid clicks that cause lag
   if (!isActive) return;
 
-  if (currentStep < walkthroughSteps.length - 1) {
+  // Find the next valid step (skip conditional steps that don't pass)
+  let nextIndex = currentStep + 1;
+  let attempts = 0;
+  const maxAttempts = walkthroughSteps.length; // Prevent infinite loop
+  
+  while (nextIndex < walkthroughSteps.length && attempts < maxAttempts) {
+    const step = walkthroughSteps[nextIndex];
+    
+    // Check if this step should be skipped
+    if (step.conditional && typeof step.conditional === "function") {
+      if (!step.conditional()) {
+        // Skip this step and try the next one
+        nextIndex++;
+        attempts++;
+        continue;
+      }
+    }
+    
+    // Found a valid next step
+    break;
+  }
+  
+  if (nextIndex < walkthroughSteps.length) {
     // Small delay to prevent lag/shaking
     setTimeout(() => {
-      showStep(currentStep + 1);
+      showStep(nextIndex);
     }, 100);
   } else {
     finishWalkthrough();
@@ -1080,10 +1120,32 @@ export function walkthroughPrev() {
   // Prevent multiple rapid clicks that cause lag
   if (!isActive) return;
   
-  if (currentStep > 0) {
+  // Find the previous valid step (skip conditional steps that don't pass)
+  let prevIndex = currentStep - 1;
+  let attempts = 0;
+  const maxAttempts = walkthroughSteps.length; // Prevent infinite loop
+  
+  while (prevIndex >= 0 && attempts < maxAttempts) {
+    const step = walkthroughSteps[prevIndex];
+    
+    // Check if this step should be skipped
+    if (step.conditional && typeof step.conditional === "function") {
+      if (!step.conditional()) {
+        // Skip this step and try the previous one
+        prevIndex--;
+        attempts++;
+        continue;
+      }
+    }
+    
+    // Found a valid previous step
+    break;
+  }
+  
+  if (prevIndex >= 0) {
     // Small delay to prevent lag/shaking (same as walkthroughNext)
     setTimeout(() => {
-      showStep(currentStep - 1);
+      showStep(prevIndex);
     }, 100);
   }
 }

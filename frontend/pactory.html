@@ -515,12 +515,50 @@
         border: 1px solid rgba(33, 150, 243, 0.2);
         transition: all 0.2s ease;
         line-height: 1;
+        position: relative;
       }
 
       .help-icon:hover {
         background: #BBDEFB;
         border-color: rgba(33, 150, 243, 0.4);
         transform: scale(1.1);
+      }
+
+      .help-tooltip {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 8px;
+        padding: 16px 20px;
+        background: #64B5F6;
+        color: #FFFFFF;
+        font-size: 0.8125rem;
+        line-height: 1.6;
+        border-radius: 8px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 1000;
+        width: 500px;
+        max-width: 90vw;
+        white-space: normal;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      .help-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: #64B5F6;
+      }
+
+      .help-icon:hover .help-tooltip {
+        opacity: 1;
+        pointer-events: auto;
       }
 
       #payoutGraph {
@@ -819,7 +857,10 @@
       <div class="graph-container">
         <div style="display: flex; align-items: center; gap: 8px; font-size: 0.875rem; color: #37474F; margin-bottom: 12px; font-weight: 600;">
           <span>Total Payout Graph</span>
-          <span class="help-icon" title="Shows the combined payout from Progress Pay milestones and All-or-Nothing Pay rewards. Add milestone and reward view thresholds above to visualize your payout curve.">?</span>
+          <span class="help-icon">
+            ?
+            <span class="help-tooltip">Shows the combined payout from Progress Pay milestones and All-or-Nothing Pay rewards. Add milestone and reward view thresholds above to visualize your payout curve.</span>
+          </span>
       </div>
 
       <svg

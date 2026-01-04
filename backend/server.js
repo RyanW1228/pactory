@@ -26,13 +26,25 @@ console.log("✅ Verifier address:", verifierWallet.address);
 // --------------------
 // ✅ CORS + JSON
 // --------------------
-const corsOptions = {
-  origin: "*",
-  methods: ["GET", "POST", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
-};
+// const corsOptions = {
+//   origin: "*",
+//   methods: ["GET", "POST", "DELETE", "OPTIONS"],
+//   allowedHeaders: ["Content-Type"],
+// };
 
-app.use(cors(corsOptions));
+app.use(
+  cors({
+    origin: [
+      "https://pactory.xyz",
+      "https://www.pactory.xyz",
+      "http://localhost:8080",
+      "http://localhost:3000",
+      "https://pactory-production.up.railway.app",
+    ],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
 app.use(express.json({ limit: "1mb" }));
 
 // --------------------

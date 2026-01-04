@@ -16,7 +16,8 @@ const ERC20ABI = [
 let provider, signer, escrow, mnee;
 // Config
 //const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
-const API_BASE = "http://localhost:3000";
+// const API_BASE = "http://localhost:3000";
+const API_BASE = "https://pactory-production.up.railway.app"; //railway server (temp until we add DNS stuff)
 
 // Session
 const address = localStorage.getItem("address");

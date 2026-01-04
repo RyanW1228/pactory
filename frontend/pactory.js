@@ -80,8 +80,8 @@ function setSendStatus(msg, ok = false) {
 }
 
 //const API_BASE = "https://backend-muddy-hill-3958.fly.dev";
-const API_BASE = "http://localhost:3000";
-
+// const API_BASE = "http://localhost:3000";
+const API_BASE = "https://pactory-production.up.railway.app"; //railway server (temp until we add DNS stuff)
 // --- negotiate mode params ---
 const params = new URLSearchParams(window.location.search);
 const pageMode = params.get("mode"); // "negotiate" | null
