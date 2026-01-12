@@ -1,4 +1,3 @@
-```md
 # Pactory
 
 **Programmable escrow for creator sponsorships**
@@ -24,7 +23,6 @@ This repository contains the full stack:
 ---
 
 ## 🧱 Architecture
-```
 
 UI (Next.js)
 |
@@ -39,8 +37,6 @@ PactEscrow (Smart Contract)
 - Holds sponsor funds
 - Enforces conditions
 - Releases or refunds
-
-````
 
 **Flow:**
 
@@ -70,7 +66,7 @@ PactEscrow (Smart Contract)
 ```bash
 git clone <your-repo-url>
 cd pactory
-````
+```
 
 ### 2. Install
 
@@ -83,7 +79,7 @@ forge install
 
 Create a `.env.local` file:
 
-```env
+````env
 # RPC + Wallet
 SEPOLIA_RPC_URL=...
 DEPLOYER_PRIVATE_KEY=...
@@ -93,13 +89,12 @@ NEXT_PUBLIC_PACT_ESCROW_ADDRESS=0x...
 
 # Token
 NEXT_PUBLIC_MNEE_ADDRESS=0x...
-```
 
 ### 4. Run Locally
 
 ```bash
 npm run dev
-```
+````
 
 Visit: `http://localhost:3000`
 
@@ -169,7 +164,3 @@ contracts/
 ## 📄 License
 
 MIT
-
-```
-
-```
