@@ -1,161 +1,175 @@
+```md
 # Pactory
 
-Pactory is a blockchain-based escrow and verification system for creator sponsorships.  
-It ensures that advertisers only pay for _verified engagement_ by locking funds in a smart contract and releasing them automatically once performance conditions are met.
+**Programmable escrow for creator sponsorships**
 
-Built for trustless payments, transparent accounting, and abuse-resistant sponsorships.
+Pactory is a hackathon project that explores how sponsorship payments can be enforced trustlessly on-chain. Sponsors lock funds into a smart contract, creators deliver content, and payment is released only when agreed conditions are met. If conditions fail or expire, funds are refunded.
 
----
+This repository contains the full stack:
 
-## Problem
-
-Online sponsorships rely on trust:
-
-- Creators may inflate views or engagement.
-- Sponsors often pay upfront with little recourse.
-- Disputes are subjective and slow to resolve.
-
-There is no neutral, programmable enforcement layer between sponsors and creators.
+- A web dashboard for campaign creation and monitoring
+- Server routes for verification and settlement
+- An Ethereum smart contract that holds escrow and enforces release/refund logic
 
 ---
 
-## Solution
+## ✨ Key Features
 
-Pactory introduces **on-chain escrow with verifiable performance conditions**.
-
-1. Sponsors lock funds in a smart contract.
-2. Creators publish sponsored content.
-3. Engagement metrics are verified off-chain.
-4. Once conditions are satisfied, funds are automatically released.
-5. If conditions are not met, funds can be reclaimed.
-
-No manual payouts. No trust assumptions. No opaque intermediaries.
+- **On-chain escrow** – Sponsorship funds are locked in a smart contract, not held by a platform.
+- **Condition-based settlement** – Payments are released only when performance criteria are satisfied.
+- **Transparent audit trail** – Escrow lifecycle is visible via on-chain events.
+- **Abuse-resistant payouts** – Sponsors don’t pay for unverified outcomes.
+- **Hackathon-friendly MVP design** – Simple, traceable flows for rapid iteration.
 
 ---
 
-## How It Works
+## 🧱 Architecture
+```
 
-### 1. Escrow Creation
-
-A sponsor deposits stablecoins into the `PactEscrow` contract, defining:
-
-- Recipient (creator)
-- Required performance metrics (e.g. views, engagement)
-- Expiry window
-
-### 2. Verification
-
-An off-chain verification layer checks the content’s performance against the agreed conditions.
-
-### 3. Settlement
-
-- **Success:** funds are released to the creator.
-- **Failure / Timeout:** funds return to the sponsor.
-
-All state transitions are recorded on-chain.
-
----
-
-## Architecture
-
-Sponsor
-│
-▼
+UI (Next.js)
+|
+v
+/api/create -> create escrow + lock funds
+/api/verify -> check off-chain performance conditions
+/api/settle -> release or refund based on result
+|
+v
 PactEscrow (Smart Contract)
-│
-├── Deposit funds
-├── Lock under conditions
-├── Release on success
-└── Refund on failure
-│
-▼
-Creator
 
-markdown
-Copy code
+- Holds sponsor funds
+- Enforces conditions
+- Releases or refunds
 
-### Core Components
+````
 
-- **Solidity Contracts (Foundry)**
-  - Escrow logic
-  - Token handling
-  - Condition enforcement
-- **Frontend (Next.js / React)**
-  - Campaign creation
-  - Escrow tracking
-  - Claim / settlement actions
-- **Verification Layer**
-  - Validates off-chain engagement
-  - Triggers on-chain settlement
+**Flow:**
+
+1. Sponsor creates a campaign and deposits funds.
+2. Creator publishes sponsored content.
+3. Verification layer checks engagement metrics.
+4. Contract releases payment on success or refunds on failure/expiry.
+5. UI updates with final escrow state.
 
 ---
 
-## Smart Contracts
+## ⚙️ Tech Stack
 
-- `PactEscrow.sol`
-  - Handles deposits, locking, release, and refunds
-  - Enforces sponsor-defined conditions
-  - Emits on-chain events for full auditability
-
----
-
-## Tech Stack
-
-- **Solidity + Foundry** — Smart contracts, testing, deployment
-- **Next.js / React / TypeScript** — Frontend interface
-- **Ethers v6** — Blockchain interaction
-- **Ethereum (Sepolia/Mainnet)** — On-chain settlement
-- **Stablecoin (MNEE / ERC-20)** — Deterministic payouts
+- **Frontend:** Next.js, React, TypeScript
+- **Backend:** API routes (Node runtime)
+- **Blockchain:** Ethereum (tested on Sepolia)
+- **Smart Contracts:** Solidity (PactEscrow)
+- **Wallet / RPC:** ethers.js
+- **Token:** ERC-20 stablecoin (MNEE)
 
 ---
 
-## Local Development
+## 🚀 Getting Started
 
-### Install Dependencies
+### 1. Clone
 
 ```bash
-forge install
+git clone <your-repo-url>
+cd pactory
+````
+
+### 2. Install
+
+```bash
 npm install
-Build Contracts
-bash
-Copy code
-forge build
-Run Tests
-bash
-Copy code
-forge test
-Start Local Chain
-bash
-Copy code
-anvil
-Deploy
-bash
-Copy code
-forge script script/Deploy.s.sol --rpc-url <RPC_URL> --private-key <PRIVATE_KEY> --broadcast
-Example Flow
-Sponsor creates a campaign and deposits funds.
+forge install
+```
 
-Creator publishes sponsored content.
+### 3. Environment Variables
 
-Verification confirms engagement metrics.
+Create a `.env.local` file:
 
-Escrow contract releases payment automatically.
+```env
+# RPC + Wallet
+SEPOLIA_RPC_URL=...
+DEPLOYER_PRIVATE_KEY=...
 
-Why Pactory
-Trustless – no intermediaries or manual enforcement
+# Deployed contract
+NEXT_PUBLIC_PACT_ESCROW_ADDRESS=0x...
 
-Transparent – all escrow states visible on-chain
+# Token
+NEXT_PUBLIC_MNEE_ADDRESS=0x...
+```
 
-Fair – creators get paid instantly when conditions are met
+### 4. Run Locally
 
-Secure – sponsors only pay for verified performance
+```bash
+npm run dev
+```
 
-Future Work
-Multi-oracle verification
+Visit: `http://localhost:3000`
 
-DAO-governed dispute resolution
+---
 
-Cross-platform metric aggregation
+## 🔐 Smart Contract
 
-Creator reputation and campaign scoring
+The **PactEscrow** contract is responsible for:
+
+- Holding sponsor funds
+- Enforcing agreed conditions
+- Releasing payment to creators
+- Refunding sponsors on failure or expiration
+
+**Key concept:**
+
+- **Escrowed settlement**: funds move only when conditions are satisfied.
+
+---
+
+## 🧪 Example Flow
+
+1. Sponsor deposits tokens into escrow for a campaign.
+2. Creator publishes the sponsored content.
+3. Verification checks metrics against the campaign terms.
+4. Settlement triggers **release** (success) or **refund** (failure/expiry).
+5. Campaign status is visible on-chain and in the dashboard.
+
+---
+
+## 📂 Project Structure
+
+```
+src/
+  app/
+    campaigns/                # Campaign creation + tracking UI
+    api/
+      create/                 # Escrow creation
+      verify/                 # Performance verification
+      settle/                 # On-chain settlement
+  lib/
+    escrowStore.ts            # Campaign state tracking
+    abis/                     # Contract ABIs
+contracts/
+  PactEscrow.sol              # Core escrow logic
+```
+
+---
+
+## ⚠️ Limitations
+
+- **Off-chain verification**: engagement metrics are not inherently on-chain.
+- **MVP design**: not production-hardened.
+- **Single verifier**: no dispute resolution or multi-source attestation yet.
+
+---
+
+## 🔮 What’s Next
+
+- Multi-source verification (multi-oracle)
+- Dispute resolution layer
+- Creator reputation and scoring
+- Cross-platform sponsorship support
+
+---
+
+## 📄 License
+
+MIT
+
+```
+
 ```
